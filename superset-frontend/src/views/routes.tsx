@@ -93,6 +93,13 @@ const DatasetCreation = lazy(
     ),
 );
 
+const DatasetRelationshipsPage = lazy(
+  () =>
+    import(
+      /* webpackChunkName: "DatasetRelationships" */ 'src/pages/DatasetRelationshipsPage'
+    ),
+);
+
 const ExecutionLogList = lazy(
   () =>
     import(
@@ -300,6 +307,10 @@ export const routes: Routes = [
   {
     path: '/superset/explore/p',
     Component: Chart,
+  },
+  {
+    path: '/dataset/relationships/',
+    Component: DatasetRelationshipsPage,
   },
   {
     path: '/dataset/add/',
