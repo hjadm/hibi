@@ -12,22 +12,13 @@
 
 import { useCallback, useState } from 'react';
 import { SupersetClient } from '@superset-ui/core';
+import type { DrillDownLevel, DrillDownHierarchy } from './types';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export interface DrillDownLevel {
-  dataset_id: number;
-  column_name: string;
-  label: string;
-}
-
-export interface DrillDownHierarchy {
-  id: string;
-  name: string;
-  levels: DrillDownLevel[];
-}
+export type { DrillDownLevel, DrillDownHierarchy };
 
 export interface DrillDownState {
   hierarchyId: string;

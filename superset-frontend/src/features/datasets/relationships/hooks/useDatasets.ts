@@ -29,9 +29,10 @@ export function useDatasetList() {
     setLoading(true);
     try {
       const { json } = await SupersetClient.get({
-        endpoint: '/api/v1/dataset/?q=(keys:none,columns:!(id,table_name,schema,database,columns),page_size:500)',
+        endpoint: '/api/v1/dataset/?q=(keys:none,page_size:500)',
       });
       // The dataset list API returns { result: [...] }
+      // Each dataset includes columns when accessed via this endpoint
       const result = (json as { result: DatasetSummary[] }).result;
       setDatasets(result);
     } catch (err) {

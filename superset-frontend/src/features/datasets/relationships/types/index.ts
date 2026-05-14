@@ -152,3 +152,19 @@ export interface RelationshipGraphResponse {
   datasets: DatasetSummary[];
   relationships: DatasetRelationship[];
 }
+
+// ---------------------------------------------------------------------------
+// Drill-Down types (shared between DrillDownConfig and drillDownNavigation)
+// ---------------------------------------------------------------------------
+
+export interface DrillDownLevel {
+  dataset_id: number;
+  column_name: string;
+  label: string;
+}
+
+export interface DrillDownHierarchy {
+  id: string;
+  name: string;
+  levels: DrillDownLevel[];
+}

@@ -16,19 +16,9 @@ import { useState, useCallback, useMemo } from 'react';
 import { useTheme } from '@apache-superset/core/theme';
 import { Select, Input, Button, Modal } from '@superset-ui/core/components';
 import { useDatasetList } from '../hooks';
-import type { DatasetSummary } from '../types';
+import type { DatasetSummary, DrillDownLevel, DrillDownHierarchy } from '../types';
 
-export interface DrillDownLevel {
-  dataset_id: number;
-  column_name: string;
-  label: string;
-}
-
-export interface DrillDownHierarchy {
-  id: string;
-  name: string;
-  levels: DrillDownLevel[];
-}
+export type { DrillDownLevel, DrillDownHierarchy };
 
 interface DrillDownConfigProps {
   show: boolean;
