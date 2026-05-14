@@ -14,7 +14,7 @@
 
 import { memo, useMemo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { useTheme } from '@superset-ui/core';
+import { useTheme } from '@apache-superset/core/theme';
 import type { DatasetNodeData } from '../types';
 
 /**

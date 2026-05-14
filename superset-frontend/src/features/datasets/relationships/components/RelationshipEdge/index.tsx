@@ -19,7 +19,7 @@ import {
   getSmoothStepPath,
   type EdgeProps,
 } from '@xyflow/react';
-import { useTheme } from '@superset-ui/core';
+import { useTheme } from '@apache-superset/core/theme';
 import type { RelationshipEdgeData } from '../types';
 
 /**

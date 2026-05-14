@@ -309,10 +309,6 @@ export const routes: Routes = [
     Component: Chart,
   },
   {
-    path: '/dataset/relationships/',
-    Component: DatasetRelationshipsPage,
-  },
-  {
     path: '/dataset/add/',
     Component: DatasetCreation,
   },
@@ -351,6 +347,13 @@ if (isFeatureEnabled(FeatureFlag.TaggingSystem)) {
   routes.push({
     path: '/superset/tags/',
     Component: Tags,
+  });
+}
+
+if (isFeatureEnabled(FeatureFlag.DatasetRelationships)) {
+  routes.push({
+    path: '/dataset/relationships/',
+    Component: DatasetRelationshipsPage,
   });
 }
 

@@ -33,8 +33,8 @@ import {
   type OnEdgesChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useTheme } from '@superset-ui/core';
-import { Button } from 'src/components';
+import { useTheme } from '@apache-superset/core/theme';
+import { Button } from '@superset-ui/core/components';
 import { DatasetNode } from '../components/DatasetNode';
 import { RelationshipEdge } from '../components/RelationshipEdge';
 import RelationshipSidebar from '../components/RelationshipSidebar';

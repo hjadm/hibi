@@ -13,9 +13,8 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { useTheme } from '@superset-ui/core';
-import { Select, Input, Button } from 'src/components';
-import Modal from 'src/components/Modal';
+import { useTheme } from '@apache-superset/core/theme';
+import { Select, Input, Button, Modal } from '@superset-ui/core/components';
 import type {
   RelationshipColumn,
   ColumnOperator,

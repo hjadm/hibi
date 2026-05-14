@@ -13,8 +13,8 @@
  */
 
 import { useState, useCallback } from 'react';
-import { useTheme } from '@superset-ui/core';
-import { Select, Input, Button } from 'src/components';
+import { useTheme } from '@apache-superset/core/theme';
+import { Select, Input, Button } from '@superset-ui/core/components';
 import type {
   DatasetRelationship,
   RelationshipType,

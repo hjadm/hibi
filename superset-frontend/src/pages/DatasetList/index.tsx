@@ -1152,7 +1152,7 @@ const DatasetList: FunctionComponent<DatasetListProps> = ({
     });
   }
 
-  if (canCreate) {
+  if (canCreate && isFeatureEnabled(FeatureFlag.DatasetRelationships)) {
     buttonArr.push({
       name: t('Relationships'),
       buttonStyle: 'link',
