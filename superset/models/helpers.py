@@ -1309,9 +1309,10 @@ class ExploreMixin:  # pylint: disable=too-many-public-methods
 
         This method handles:
         1. Query execution via self.query()
-        2. DataFrame normalization
-        3. Time offset processing (if applicable)
-        4. Post-processing operations
+        2. Cross-database relationship merges (when DATASET_RELATIONSHIPS enabled)
+        3. DataFrame normalization
+        4. Time offset processing (if applicable)
+        5. Post-processing operations
 
         :param query_object: The query configuration
         :return: QueryResult with processed dataframe
@@ -1319,6 +1320,9 @@ class ExploreMixin:  # pylint: disable=too-many-public-methods
         # Execute the base query
         result = self.query(query_object.to_dict())
         query = result.query + ";\n\n" if result.query else ""
+
+        # -- Dataset Relationship Engine: cross-database merges ------------
+        result = self._maybe_apply_cross_db_merges(result)
 
         # Process the dataframe if not empty
         df = result.df
@@ -1349,6 +1353,173 @@ class ExploreMixin:  # pylint: disable=too-many-public-methods
         result.query = query
         result.from_dttm = query_object.from_dttm
         result.to_dttm = query_object.to_dttm
+
+        return result
+
+    # ------------------------------------------------------------------
+    # Dataset Relationship Engine helpers
+    # ------------------------------------------------------------------
+
+    def _maybe_inject_relationship_joins(
+        self,
+        tbl: Any,
+    ) -> Any:
+        """Inject same-database JOIN clauses into the FROM selectable.
+
+        This method is called inside ``get_sqla_query()`` just before the
+        query's ``select_from()`` call.  If the ``DATASET_RELATIONSHIPS``
+        feature flag is disabled or no active same-db relationships exist
+        for the current dataset, the original *tbl* is returned unchanged.
+
+        :param tbl: The current SQLAlchemy selectable (table/alias).
+        :return: Either the original *tbl* or a ``Join`` object.
+        """
+        if not is_feature_enabled("DATASET_RELATIONSHIPS"):
+            return tbl
+
+        dataset_id = getattr(self, "id", None)
+        if dataset_id is None:
+            return tbl
+
+        try:
+            from superset.common.relationship_query_injector import (
+                RelationshipQueryInjector,
+            )
+
+            injector = RelationshipQueryInjector()
+            relationships = injector.get_active_relationships(dataset_id)
+            same_db = injector.get_same_db_relationships(relationships)
+
+            if not same_db:
+                return tbl
+
+            logger.info(
+                "Injecting %d same-database JOIN(s) for dataset %d",
+                len(same_db),
+                dataset_id,
+            )
+            return injector.inject_joins(
+                sqla_query=sa.select(sa.text("*")),
+                source_table=tbl,
+                relationships=same_db,
+            ).froms[0]  # extract the Join object from the dummy select
+        except Exception:  # pylint: disable=broad-except
+            logger.exception(
+                "Failed to inject relationship JOINs for dataset %d; "
+                "falling back to original query.",
+                dataset_id,
+            )
+            return tbl
+
+    def _maybe_apply_cross_db_merges(
+        self,
+        result: "QueryResult",
+    ) -> "QueryResult":
+        """Merge cross-database related datasets into the result DataFrame.
+
+        This method is called inside ``get_query_result()`` right after the
+        base query has been executed.  If the ``DATASET_RELATIONSHIPS``
+        feature flag is disabled, or no active cross-database relationships
+        exist, the original *result* is returned unchanged.
+
+        :param result: The ``QueryResult`` from the base query.
+        :return: Potentially augmented ``QueryResult``.
+        """
+        if not is_feature_enabled("DATASET_RELATIONSHIPS"):
+            return result
+
+        dataset_id = getattr(self, "id", None)
+        if dataset_id is None or result.df.empty:
+            return result
+
+        try:
+            from superset.common.cross_database_merger import CrossDatabaseMerger
+            from superset.common.relationship_query_injector import (
+                RelationshipQueryInjector,
+            )
+
+            injector = RelationshipQueryInjector()
+            relationships = injector.get_active_relationships(dataset_id)
+            cross_db = injector.get_cross_db_relationships(relationships)
+
+            if not cross_db:
+                return result
+
+            max_rows = int(
+                app.config.get("RELATIONSHIP_MAX_MERGE_ROWS", 100_000)
+            )
+            timeout = int(
+                app.config.get("RELATIONSHIP_QUERY_TIMEOUT", 30)
+            )
+            merger = CrossDatabaseMerger(
+                max_rows=max_rows,
+                timeout_seconds=timeout,
+            )
+
+            merged_df = result.df
+            extra_queries: list[str] = []
+
+            for rel in cross_db:
+                target_ds = rel.target_dataset
+                if target_ds is None:
+                    logger.warning(
+                        "Cross-db relationship %d has no target dataset; skipping.",
+                        rel.id,
+                    )
+                    continue
+
+                # Execute query on the target database
+                try:
+                    target_df = target_ds.database.get_df(
+                        f"SELECT * FROM {target_ds.table_name}",  # noqa: S608
+                        target_ds.catalog,
+                        target_ds.schema,
+                    )
+                except Exception:  # pylint: disable=broad-except
+                    logger.exception(
+                        "Failed to query target dataset %d for cross-db "
+                        "relationship %d; skipping.",
+                        target_ds.id,
+                        rel.id,
+                    )
+                    continue
+
+                column_pairs = [
+                    (col.source_column_name, col.target_column_name)
+                    for col in rel.columns
+                ]
+
+                merge_result = merger.merge_dataframes(
+                    source_df=merged_df,
+                    target_df=target_df,
+                    column_pairs=column_pairs,
+                    join_type=rel.join_type,
+                    source_prefix=getattr(self, "table_name", "source"),
+                    target_prefix=target_ds.table_name,
+                )
+                merged_df = merge_result.df
+                extra_queries.append(
+                    f"-- Cross-database merge with '{target_ds.table_name}' "
+                    f"({rel.join_type} JOIN on {column_pairs})"
+                )
+
+                logger.info(
+                    "Cross-database merge applied: relationship %d, "
+                    "result %d rows",
+                    rel.id,
+                    len(merged_df),
+                )
+
+            result.df = merged_df
+            if extra_queries:
+                result.query = (result.query or "") + "\n".join(extra_queries)
+
+        except Exception:  # pylint: disable=broad-except
+            logger.exception(
+                "Failed to apply cross-database merges for dataset %d; "
+                "returning original result.",
+                dataset_id,
+            )
 
         return result
 
@@ -3492,6 +3663,9 @@ class ExploreMixin:  # pylint: disable=too-many-public-methods
                 else:
                     # Original behavior: filter to only top groups
                     qry = qry.where(top_groups)
+
+        # -- Dataset Relationship Engine: inject same-database JOINs ------
+        tbl = self._maybe_inject_relationship_joins(tbl)
 
         qry = qry.select_from(tbl)
 

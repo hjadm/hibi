@@ -561,6 +561,10 @@ DEFAULT_FEATURE_FLAGS: dict[str, bool] = {
     # Allow metrics and columns to be grouped into folders in the chart builder
     # @lifecycle: development
     "DATASET_FOLDERS": False,
+    # Enable the Dataset Relationship Engine for automatic JOINs between
+    # datasets (same-database via SQL, cross-database via Pandas merge).
+    # @lifecycle: development
+    "DATASET_RELATIONSHIPS": False,
     # Enable support for date range timeshifts (e.g., "2015-01-03 : 2015-01-04")
     # in addition to relative timeshifts (e.g., "1 day ago")
     # @lifecycle: development
@@ -2580,6 +2584,18 @@ DISTRIBUTED_LOCK_DEFAULT_TTL = 30
 
 # Channel prefix for task abort pub/sub messages
 TASKS_ABORT_CHANNEL_PREFIX = "gtf:abort:"
+
+# -------------------------------------------------------------------
+# Dataset Relationship Engine
+# -------------------------------------------------------------------
+# Maximum number of rows allowed when merging DataFrames from different
+# databases.  If the estimated result exceeds this value the merge is
+# aborted *before* allocating memory.
+RELATIONSHIP_MAX_MERGE_ROWS = 100_000
+
+# Wall-clock timeout (seconds) for a single cross-database merge operation.
+# Set to 0 to disable.
+RELATIONSHIP_QUERY_TIMEOUT = 30
 
 # -------------------------------------------------------------------
 # *                WARNING:  STOP EDITING  HERE                    *
