@@ -64,7 +64,6 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy_utils import UUIDType
 
 from superset.models.helpers import AuditMixinNullable
 
@@ -136,8 +135,8 @@ class DatasetRelationship(Model, AuditMixinNullable):
 
     id: int = Column(Integer, primary_key=True, autoincrement=True)
     uuid = Column(
-        UUIDType(binary=True),
-        default=uuid_module.uuid4,
+        String(36),
+        default=lambda: str(uuid_module.uuid4()),
         unique=True,
         nullable=False,
     )
@@ -203,7 +202,7 @@ class DatasetRelationship(Model, AuditMixinNullable):
     )
     columns: list[DatasetRelationshipColumn] = relationship(
         "DatasetRelationshipColumn",
-        back_populates="relationship",
+        back_populates="relationship_obj",
         cascade="all, delete-orphan",
         order_by="DatasetRelationshipColumn.ordinal",
         lazy="joined",

@@ -17,7 +17,7 @@
 """add_dataset_relationships
 
 Revision ID: a8b9c0d1e2f3
-Revises: 33d7e0e21daa
+Revises: ce6bd21901ab
 Create Date: 2026-05-14 10:00:00.000000
 
 """
@@ -27,7 +27,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "a8b9c0d1e2f3"
-down_revision = "33d7e0e21daa"
+down_revision = "ce6bd21901ab"
 
 
 def upgrade() -> None:
@@ -155,9 +155,21 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("0"),
         ),
-        # Audit columns
+        # Audit columns (AuditMixinNullable pattern)
         sa.Column("created_on", sa.DateTime(), nullable=True),
         sa.Column("changed_on", sa.DateTime(), nullable=True),
+        sa.Column(
+            "created_by_fk",
+            sa.Integer(),
+            sa.ForeignKey("ab_user.id"),
+            nullable=True,
+        ),
+        sa.Column(
+            "changed_by_fk",
+            sa.Integer(),
+            sa.ForeignKey("ab_user.id"),
+            nullable=True,
+        ),
         # Unique constraint: one mapping per (relationship, source, target) triple
         sa.UniqueConstraint(
             "relationship_id",

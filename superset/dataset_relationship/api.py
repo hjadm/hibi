@@ -30,7 +30,7 @@ from flask_appbuilder.api import expose, protect, rison as parse_rison, safe
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from marshmallow import ValidationError
 
-from superset import event_logger
+from superset import event_logger, is_feature_enabled
 from superset.commands.dataset_relationship.create import (
     CreateDatasetRelationshipCommand,
 )
@@ -63,6 +63,8 @@ from superset.views.base_api import (
     requires_json,
     statsd_metrics,
 )
+
+DATASET_RELATIONSHIPS_FLAG = "DATASET_RELATIONSHIPS"
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +122,17 @@ class DatasetRelationshipRestApi(BaseSupersetModelRestApi):
         "bulk_delete",
         "get_by_dataset",
     }
+
+    @staticmethod
+    def _check_feature_flag() -> Response | None:
+        """Return a 403 response if the feature flag is disabled."""
+        if not is_feature_enabled(DATASET_RELATIONSHIPS_FLAG):
+            return Response(
+                status=403,
+                response="Dataset Relationships feature is not enabled.",
+                content_type="text/plain",
+            )
+        return None
 
     list_columns = [
         "id",
@@ -195,6 +208,72 @@ class DatasetRelationshipRestApi(BaseSupersetModelRestApi):
     )
 
     # ------------------------------------------------------------------ #
+    # GET  /api/v1/dataset_relationship/ (list)
+    # ------------------------------------------------------------------ #
+    @expose("/", methods=("GET",))
+    @protect()
+    @safe
+    @statsd_metrics
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.get_list",
+        log_to_statsd=False,
+    )
+    def get_list(self, **kwargs: Any) -> Response:
+        """Get a list of dataset relationships.
+        ---
+        get:
+          summary: Get a list of dataset relationships
+          description: >-
+            Gets a list of dataset relationships. Use Rison or JSON
+            query parameters for filtering, sorting, pagination and
+            for selecting specific columns and metadata.
+          responses:
+            200:
+              description: List of relationships
+            401:
+              $ref: '#/components/responses/401'
+            403:
+              $ref: '#/components/responses/403'
+            500:
+              $ref: '#/components/responses/500'
+        """
+        flag_response = self._check_feature_flag()
+        if flag_response:
+            return flag_response
+        return super().get_list(**kwargs)
+
+    # ------------------------------------------------------------------ #
+    # GET  /api/v1/dataset_relationship/<pk> (info)
+    # ------------------------------------------------------------------ #
+    @expose("/info", methods=("GET",))
+    @protect()
+    @safe
+    @statsd_metrics
+    @event_logger.log_this_with_context(
+        action=lambda self, *args, **kwargs: f"{self.__class__.__name__}.info",
+        log_to_statsd=False,
+    )
+    def info(self) -> Response:
+        """Get metadata info.
+        ---
+        get:
+          summary: Get API metadata
+          responses:
+            200:
+              description: API metadata
+            401:
+              $ref: '#/components/responses/401'
+            403:
+              $ref: '#/components/responses/403'
+            500:
+              $ref: '#/components/responses/500'
+        """
+        flag_response = self._check_feature_flag()
+        if flag_response:
+            return flag_response
+        return super().info()
+
+    # ------------------------------------------------------------------ #
     # POST  /api/v1/dataset_relationship/
     # ------------------------------------------------------------------ #
     @expose("/", methods=("POST",))
@@ -245,6 +324,9 @@ class DatasetRelationshipRestApi(BaseSupersetModelRestApi):
             500:
               $ref: '#/components/responses/500'
         """
+        flag_response = self._check_feature_flag()
+        if flag_response:
+            return flag_response
         try:
             item = self.add_model_schema.load(request.json)
         except ValidationError as error:
@@ -325,6 +407,9 @@ class DatasetRelationshipRestApi(BaseSupersetModelRestApi):
             500:
               $ref: '#/components/responses/500'
         """
+        flag_response = self._check_feature_flag()
+        if flag_response:
+            return flag_response
         try:
             item = self.edit_model_schema.load(request.json)
         except ValidationError as error:
@@ -392,6 +477,9 @@ class DatasetRelationshipRestApi(BaseSupersetModelRestApi):
             500:
               $ref: '#/components/responses/500'
         """
+        flag_response = self._check_feature_flag()
+        if flag_response:
+            return flag_response
         try:
             DeleteDatasetRelationshipCommand([pk]).run()
             return self.response(200, message="OK")
@@ -454,6 +542,9 @@ class DatasetRelationshipRestApi(BaseSupersetModelRestApi):
               $ref: '#/components/responses/500'
         """
         item_ids = kwargs["rison"]
+        flag_response = self._check_feature_flag()
+        if flag_response:
+            return flag_response
         try:
             DeleteDatasetRelationshipCommand(item_ids).run()
             return self.response(
@@ -531,6 +622,9 @@ class DatasetRelationshipRestApi(BaseSupersetModelRestApi):
               $ref: '#/components/responses/500'
         """
         active_only_str = request.args.get("active_only", "true")
+        flag_response = self._check_feature_flag()
+        if flag_response:
+            return flag_response
         active_only = active_only_str.lower() not in ("false", "0", "no")
 
         relationships = DatasetRelationshipDAO.find_by_dataset_id(
