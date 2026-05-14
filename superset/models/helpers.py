@@ -1398,11 +1398,13 @@ class ExploreMixin:  # pylint: disable=too-many-public-methods
                 len(same_db),
                 dataset_id,
             )
-            return injector.inject_joins(
+            joined_query = injector.inject_joins(
                 sqla_query=sa.select(sa.text("*")),
                 source_table=tbl,
                 relationships=same_db,
-            ).froms[0]  # extract the Join object from the dummy select
+            )
+            # Extract the Join object from the wrapper Select
+            return joined_query.froms[0] if joined_query.froms else tbl
         except Exception:  # pylint: disable=broad-except
             logger.exception(
                 "Failed to inject relationship JOINs for dataset %d; "
@@ -1469,9 +1471,21 @@ class ExploreMixin:  # pylint: disable=too-many-public-methods
                     continue
 
                 # Execute query on the target database
+                # Only select columns needed for the merge (join columns)
+                # to avoid pulling unnecessary data from large tables.
+                target_columns = list(
+                    {col.target_column_name for col in rel.columns}
+                )
+                cols_expr = ', '.join(
+                    target_ds.database.db_engine_spec.quote_identifier(c)
+                    for c in target_columns
+                )
+                quoted_table = target_ds.database.db_engine_spec.quote_identifier(
+                    target_ds.table_name
+                )
                 try:
                     target_df = target_ds.database.get_df(
-                        f"SELECT * FROM {target_ds.table_name}",  # noqa: S608
+                        f"SELECT {cols_expr} FROM {quoted_table}",
                         target_ds.catalog,
                         target_ds.schema,
                     )

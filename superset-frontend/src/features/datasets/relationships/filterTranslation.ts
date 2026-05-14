@@ -59,14 +59,22 @@ export interface RelationshipMapping {
  */
 export class FilterTranslationEngine {
   private relationshipCache: Map<number, RelationshipMapping[]> = new Map();
+  private cacheTimestamps: Map<number, number> = new Map();
+  private static CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
   /**
    * Load relationships for a dataset from the API.
    */
   async loadRelationships(datasetId: number): Promise<RelationshipMapping[]> {
-    if (this.relationshipCache.has(datasetId)) {
+    // Check TTL: invalidate stale entries
+    const cachedAt = this.cacheTimestamps.get(datasetId) ?? 0;
+    if (
+      this.relationshipCache.has(datasetId) &&
+      Date.now() - cachedAt < FilterTranslationEngine.CACHE_TTL_MS
+    ) {
       return this.relationshipCache.get(datasetId)!;
     }
+    this.relationshipCache.delete(datasetId);
 
     try {
       const { json } = await SupersetClient.get({
@@ -92,6 +100,7 @@ export class FilterTranslationEngine {
       }));
 
       this.relationshipCache.set(datasetId, relationships);
+      this.cacheTimestamps.set(datasetId, Date.now());
       return relationships;
     } catch {
       return [];
@@ -218,6 +227,16 @@ export class FilterTranslationEngine {
    */
   clearCache(): void {
     this.relationshipCache.clear();
+    this.cacheTimestamps.clear();
+  }
+
+  /**
+   * Invalidate cache for a specific dataset.
+   * Called after create/update/delete operations on relationships.
+   */
+  invalidateDataset(datasetId: number): void {
+    this.relationshipCache.delete(datasetId);
+    this.cacheTimestamps.delete(datasetId);
   }
 }
 

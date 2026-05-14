@@ -20,6 +20,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { SupersetClient } from '@superset-ui/core';
 import { addDangerToast } from 'src/components/MessageToasts/actions';
+import { filterTranslationEngine } from '../filterTranslation';
 import type {
   DatasetRelationship,
   DatasetRelationshipCreate,
@@ -107,6 +108,9 @@ export function useCreateRelationship() {
           headers: { 'Content-Type': 'application/json' },
         });
         const resp = json as RelationshipCreateResponse;
+        // Invalidate cache for involved datasets
+        filterTranslationEngine.invalidateDataset(data.source_dataset_id);
+        filterTranslationEngine.invalidateDataset(data.target_dataset_id);
         // Fetch full relationship
         const { json: fullJson } = await SupersetClient.get({
           endpoint: `${API_BASE}/${resp.id}`,
@@ -147,7 +151,11 @@ export function useUpdateRelationship() {
         const { json } = await SupersetClient.get({
           endpoint: `${API_BASE}/${id}`,
         });
-        return (json as { result: DatasetRelationship }).result;
+        const result = (json as { result: DatasetRelationship }).result;
+        // Invalidate cache for involved datasets
+        filterTranslationEngine.invalidateDataset(result.source_dataset_id);
+        filterTranslationEngine.invalidateDataset(result.target_dataset_id);
+        return result;
       } catch (err) {
         addDangerToast('Error updating relationship.');
         throw err;
@@ -171,7 +179,14 @@ export function useDeleteRelationship() {
   const remove = useCallback(async (id: number): Promise<void> => {
     setLoading(true);
     try {
+      // Fetch before delete to get dataset IDs for cache invalidation
+      const { json } = await SupersetClient.get({
+        endpoint: `${API_BASE}/${id}`,
+      });
+      const rel = (json as { result: DatasetRelationship }).result;
       await SupersetClient.delete({ endpoint: `${API_BASE}/${id}` });
+      filterTranslationEngine.invalidateDataset(rel.source_dataset_id);
+      filterTranslationEngine.invalidateDataset(rel.target_dataset_id);
     } catch (err) {
       addDangerToast('Error deleting relationship.');
       throw err;

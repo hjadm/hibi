@@ -718,12 +718,14 @@ class DatasetRelationshipRestApi(BaseSupersetModelRestApi):
 
             # Get the target table's select expression
             target_sqla_table = target_table.get_sqla_table()
-            target_col = getattr(target_sqla_table.c, target_column, None)
 
-            if target_col is None:
+            # Validate column exists in target dataset's schema
+            valid_columns = {c.name for c in target_sqla_table.c}
+            if target_column not in valid_columns:
                 return self.response_400(
                     message=f"Column '{target_column}' not found in target dataset."
                 )
+            target_col = target_sqla_table.c[target_column]
 
             # Query distinct target values
             query = (
