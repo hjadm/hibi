@@ -313,6 +313,10 @@ export const routes: Routes = [
     Component: DatasetCreation,
   },
   {
+    path: '/dataset/relationships/',
+    Component: DatasetRelationshipsPage,
+  },
+  {
     path: '/dataset/:datasetId',
     Component: DatasetCreation,
   },
@@ -350,12 +354,7 @@ if (isFeatureEnabled(FeatureFlag.TaggingSystem)) {
   });
 }
 
-if (isFeatureEnabled(FeatureFlag.DatasetRelationships)) {
-  routes.push({
-    path: '/dataset/relationships/',
-    Component: DatasetRelationshipsPage,
-  });
-}
+// DatasetRelationships route moved into main routes array before /dataset/:datasetId
 
 const user = getBootstrapData()?.user;
 const authRegistrationEnabled =

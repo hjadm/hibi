@@ -116,7 +116,10 @@ class DatasetRelationshipRestApi(BaseSupersetModelRestApi):
 
     # Re-use Dataset permissions so no new permission rows are needed.
     class_permission_name = "Dataset"
-    method_permission_name = MODEL_API_RW_METHOD_PERMISSION_MAP
+    method_permission_name = {
+        **MODEL_API_RW_METHOD_PERMISSION_MAP,
+        "get_by_dataset": "read",
+    }
 
     include_route_methods = RouteMethod.REST_MODEL_VIEW_CRUD_SET | {
         "bulk_delete",
@@ -126,7 +129,12 @@ class DatasetRelationshipRestApi(BaseSupersetModelRestApi):
     @staticmethod
     def _check_feature_flag() -> Response | None:
         """Return a 403 response if the feature flag is disabled."""
-        if not is_feature_enabled(DATASET_RELATIONSHIPS_FLAG):
+        flag_val = is_feature_enabled(DATASET_RELATIONSHIPS_FLAG)
+        logger.warning(
+            "_check_feature_flag: flag=%s, constant=%s, result=%s",
+            flag_val, DATASET_RELATIONSHIPS_FLAG, not flag_val,
+        )
+        if not flag_val:
             return Response(
                 status=403,
                 response="Dataset Relationships feature is not enabled.",
@@ -568,7 +576,7 @@ class DatasetRelationshipRestApi(BaseSupersetModelRestApi):
     # GET  /api/v1/dataset_relationship/dataset/<dataset_id>
     # ------------------------------------------------------------------ #
     @expose("/dataset/<int:dataset_id>", methods=("GET",))
-    @protect()
+    @protect(allow_browser_login=True)
     @safe
     @statsd_metrics
     @event_logger.log_this_with_context(

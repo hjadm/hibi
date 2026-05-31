@@ -29,9 +29,10 @@ import { SupersetClient } from '@superset-ui/core';
 const mockGet = SupersetClient.get as jest.MockedFunction<
   typeof SupersetClient.get
 >;
-const mockPost = SupersetClient.post as jest.MockedFunction<
+const _mockPost = SupersetClient.post as jest.MockedFunction<
   typeof SupersetClient.post
 >;
+void _mockPost;
 
 describe('FilterTranslationEngine', () => {
   let engine: FilterTranslationEngine;

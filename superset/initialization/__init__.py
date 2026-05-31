@@ -344,6 +344,18 @@ class SupersetAppInitializer:  # pylint: disable=too-many-public-methods
             category_icon="",
         )
 
+        appbuilder.add_link(
+            "Dataset Relationships",
+            label=_("Relationships"),
+            href=f"{app_root}/dataset/relationships/",
+            icon="fa-link",
+            category="",
+            category_icon="",
+            cond=lambda: feature_flag_manager.is_feature_enabled(
+                "DATASET_RELATIONSHIPS"
+            ),
+        )
+
         appbuilder.add_view(
             RolesListView,
             "List Roles",

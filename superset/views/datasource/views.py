@@ -246,6 +246,12 @@ class DatasetEditor(BaseSupersetView):
     def root(self) -> FlaskResponse:
         return super().render_app_template()
 
+    @expose("/relationships/", methods=("GET",))
+    @has_access
+    @permission_name("read")
+    def relationships(self) -> FlaskResponse:
+        return super().render_app_template()
+
     @expose("/<pk>", methods=("GET",))
     @has_access
     @permission_name("read")

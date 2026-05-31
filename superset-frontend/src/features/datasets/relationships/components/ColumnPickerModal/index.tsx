@@ -2,9 +2,9 @@
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
+ * regarding copyright ownership.  This ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file that was agreed to
+ * "License"); you may not use this file except be agreed to
  * by you in writing, software distributed under the License
  * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
  * CONDITIONS OF ANY KIND, either express or implied.  See
@@ -12,14 +12,14 @@
  * and limitations under the License.
  */
 
-import { useState, useMemo, useCallback } from 'react';
-import { useTheme } from '@apache-superset/core/theme';
-import { Select, Input, Button, Modal } from '@superset-ui/core/components';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { SupersetClient } from '@superset-ui/core';
+import { Button, Select } from '@superset-ui/core/components';
 import type {
   RelationshipColumn,
   ColumnOperator,
   DatasetSummary,
-} from '../types';
+} from '../../types';
 
 interface ColumnPickerModalProps {
   show: boolean;
@@ -55,31 +55,73 @@ export default function ColumnPickerModal({
   onSave,
   onHide,
 }: ColumnPickerModalProps) {
-  const theme = useTheme();
+  // Enriched datasets with full column info fetched individually
+  const [enrichedSource, setEnrichedSource] = useState<DatasetSummary | null>(null);
+  const [enrichedTarget, setEnrichedTarget] = useState<DatasetSummary | null>(null);
+  const [columnsLoading, setColumnsLoading] = useState(false);
+
+  // When modal opens, fetch full dataset details if columns are missing
+  useEffect(() => {
+    if (!show) {
+      setEnrichedSource(null);
+      setEnrichedTarget(null);
+      return;
+    }
+
+    const fetchDataset = async (ds: DatasetSummary | null): Promise<DatasetSummary | null> => {
+      if (!ds) return null;
+      // If columns already present, use as-is
+      if (ds.columns && ds.columns.length > 0) return ds;
+      // Otherwise fetch full dataset details
+      const { json } = await SupersetClient.get({ endpoint: `/api/v1/dataset/${ds.id}` });
+      return json as unknown as DatasetSummary;
+    };
+
+    let cancelled = false;
+    setColumnsLoading(true);
+    Promise.all([fetchDataset(sourceDataset), fetchDataset(targetDataset)])
+      .then(([src, tgt]) => {
+        if (!cancelled) {
+          setEnrichedSource(src);
+          setEnrichedTarget(tgt);
+          setColumnsLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setColumnsLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [show, sourceDataset, targetDataset]);
+
+  const effectiveSource = enrichedSource ?? sourceDataset;
+  const effectiveTarget = enrichedTarget ?? targetDataset;
 
   const sourceColumnOptions = useMemo(
     () =>
-      sourceDataset?.columns.map(c => ({
+      (effectiveSource?.columns ?? []).map(c => ({
         value: c.column_name,
-        label: `${c.column_name} (${c.type})`,
-      })) ?? [],
-    [sourceDataset],
+        label: `${c.column_name} (${c.type ?? ''})`,
+      })),
+    [effectiveSource],
   );
 
   const targetColumnOptions = useMemo(
     () =>
-      targetDataset?.columns.map(c => ({
+      (effectiveTarget?.columns ?? []).map(c => ({
         value: c.column_name,
-        label: `${c.column_name} (${c.type})`,
-      })) ?? [],
-    [targetDataset],
+        label: `${c.column_name} (${c.type ?? ''})`,
+      })),
+    [effectiveTarget],
   );
 
   const [pairs, setPairs] = useState<ColumnPair[]>(() =>
     (initialColumns ?? [{ source_column_name: '', target_column_name: '', operator: '=' as ColumnOperator, ordinal: 0 }]).map(
       (col, i) => ({
         id: `pair-${i}-${Date.now()}`,
-        ...col,
+        source_column_name: col.source_column_name,
+        target_column_name: col.target_column_name,
+        operator: col.operator,
         ordinal: i,
       }),
     ),
@@ -130,31 +172,29 @@ export default function ColumnPickerModal({
   );
 
   return (
-    <Modal
-      show={show}
-      onHide={onHide}
-      title="Configure Column Mappings"
-      footer={
-        <>
-          <Button buttonSize="sm" buttonStyle="secondary" onClick={onHide}>
-            Cancel
-          </Button>
-          <Button
-            buttonSize="sm"
-            buttonStyle="primary"
-            onClick={handleSave}
-            disabled={!isValid}
-          >
-            Save Mappings
-          </Button>
-        </>
-      }
-    >
+    <>
+    {show && (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', zIndex: 9999,
+      }}>
+        <div style={{
+          background: '#fff', borderRadius: 8, padding: 24, width: 600,
+          maxHeight: '80vh', overflowY: 'auto',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        }}>
+          <h3 style={{ margin: '0 0 16px 0' }}>Configure Column Mappings</h3>
+      {columnsLoading ? (
+        <div style={{ textAlign: 'center', padding: 32, color: '#999' }}>
+          Loading columns…
+        </div>
+      ) : (
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: theme.gridUnit * 3,
+          gap: 12,
         }}
       >
         {pairs.map(pair => (
@@ -163,17 +203,17 @@ export default function ColumnPickerModal({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: theme.gridUnit * 2,
-              padding: theme.gridUnit * 2,
-              background: theme.colors.grayscale.light5,
-              borderRadius: theme.borderRadius,
+              gap: 8,
+              padding: 8,
+              background: '#fafafa',
+              borderRadius: 4,
             }}
           >
             <div style={{ flex: 1 }}>
               <div
                 style={{
-                  fontSize: theme.typography.sizes.xs,
-                  color: theme.colors.grayscale.light1,
+                  fontSize: '12px',
+                  color: '#999',
                   marginBottom: 4,
                 }}
               >
@@ -182,8 +222,8 @@ export default function ColumnPickerModal({
               <Select
                 value={pair.source_column_name || undefined}
                 options={sourceColumnOptions}
-                onChange={(v: unknown) =>
-                  updatePair(pair.id, 'source_column_name', v as string)
+                onChange={(v: string) =>
+                  updatePair(pair.id, 'source_column_name', v)
                 }
                 placeholder="Select column…"
               />
@@ -192,8 +232,8 @@ export default function ColumnPickerModal({
             <div style={{ width: 100, flexShrink: 0 }}>
               <div
                 style={{
-                  fontSize: theme.typography.sizes.xs,
-                  color: theme.colors.grayscale.light1,
+                  fontSize: '12px',
+                  color: '#999',
                   marginBottom: 4,
                 }}
               >
@@ -202,8 +242,8 @@ export default function ColumnPickerModal({
               <Select
                 value={pair.operator}
                 options={OPERATOR_OPTIONS}
-                onChange={(v: unknown) =>
-                  updatePair(pair.id, 'operator', v as string)
+                onChange={(v: string) =>
+                  updatePair(pair.id, 'operator', v)
                 }
               />
             </div>
@@ -211,8 +251,8 @@ export default function ColumnPickerModal({
             <div style={{ flex: 1 }}>
               <div
                 style={{
-                  fontSize: theme.typography.sizes.xs,
-                  color: theme.colors.grayscale.light1,
+                  fontSize: '12px',
+                  color: '#999',
                   marginBottom: 4,
                 }}
               >
@@ -221,8 +261,8 @@ export default function ColumnPickerModal({
               <Select
                 value={pair.target_column_name || undefined}
                 options={targetColumnOptions}
-                onChange={(v: unknown) =>
-                  updatePair(pair.id, 'target_column_name', v as string)
+                onChange={(v: string) =>
+                  updatePair(pair.id, 'target_column_name', v)
                 }
                 placeholder="Select column…"
               />
@@ -230,7 +270,7 @@ export default function ColumnPickerModal({
 
             {pairs.length > 1 && (
               <Button
-                buttonSize="xs"
+                buttonSize="xsmall"
                 buttonStyle="danger"
                 onClick={() => removePair(pair.id)}
                 style={{ marginTop: 16 }}
@@ -242,7 +282,7 @@ export default function ColumnPickerModal({
         ))}
 
         <Button
-          buttonSize="sm"
+          buttonSize="small"
           buttonStyle="tertiary"
           onClick={addPair}
           style={{ alignSelf: 'flex-start' }}
@@ -250,6 +290,14 @@ export default function ColumnPickerModal({
           + Add Column Pair
         </Button>
       </div>
-    </Modal>
+      )}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+            <Button buttonSize="small" buttonStyle="secondary" onClick={onHide}>Cancel</Button>
+            <Button buttonSize="small" buttonStyle="primary" onClick={handleSave} disabled={!isValid || columnsLoading}>Save Mappings</Button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

@@ -12,7 +12,7 @@
  * and limitations under the License.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { SupersetClient } from '@superset-ui/core';
 import { addDangerToast } from 'src/components/MessageToasts/actions';
 import type { DatasetSummary } from '../types';
@@ -29,7 +29,7 @@ export function useDatasetList() {
     setLoading(true);
     try {
       const { json } = await SupersetClient.get({
-        endpoint: '/api/v1/dataset/?q=(keys:none,page_size:500)',
+        endpoint: '/api/v1/dataset/?q=(order_column:changed_on_delta_humanized,order_direction:desc,page:0,page_size:500)',
       });
       // The dataset list API returns { result: [...] }
       // Each dataset includes columns when accessed via this endpoint
@@ -48,6 +48,52 @@ export function useDatasetList() {
   }, [fetch]);
 
   return { datasets, loading, refresh: fetch };
+}
+
+/**
+ * Fetch full dataset details (including columns) for specific dataset IDs.
+ * Returns enriched dataset objects with columns populated.
+ */
+export function useDatasetColumnsEnricher() {
+  const cacheRef = useRef<Map<number, DatasetSummary>>(new Map());
+
+  const enrichDatasets = useCallback(
+    async (datasets: DatasetSummary[]): Promise<DatasetSummary[]> => {
+      const toFetch = datasets.filter(
+        d => !d.columns || d.columns.length === 0,
+      );
+
+      if (toFetch.length === 0) return datasets;
+
+      const results = await Promise.allSettled(
+        toFetch.map(async ds => {
+          // Check cache first
+          if (cacheRef.current.has(ds.id)) {
+            return cacheRef.current.get(ds.id)!;
+          }
+          const { json } = await SupersetClient.get({
+            endpoint: `/api/v1/dataset/${ds.id}`,
+          });
+          const full = (json as { result: DatasetSummary }).result ?? (json as DatasetSummary);
+          cacheRef.current.set(ds.id, full);
+          return full;
+        }),
+      );
+
+      // Build enriched map
+      const enrichedMap = new Map<number, DatasetSummary>();
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') {
+          enrichedMap.set(toFetch[i].id, r.value);
+        }
+      });
+
+      return datasets.map(ds => enrichedMap.get(ds.id) ?? ds);
+    },
+    [],
+  );
+
+  return { enrichDatasets };
 }
 
 /**

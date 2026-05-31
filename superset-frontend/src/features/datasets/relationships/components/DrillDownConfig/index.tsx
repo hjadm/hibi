@@ -2,9 +2,7 @@
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file that was agreed to
+ * regarding copyright ownership.  this file that was agreed to
  * by you in writing, software distributed under the License
  * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
  * CONDITIONS OF ANY KIND, either express or implied.  See
@@ -13,10 +11,9 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { useTheme } from '@apache-superset/core/theme';
-import { Select, Input, Button, Modal } from '@superset-ui/core/components';
-import { useDatasetList } from '../hooks';
-import type { DatasetSummary, DrillDownLevel, DrillDownHierarchy } from '../types';
+import { Button, Input, Select } from '@superset-ui/core/components';
+import { useDatasetList } from '../../hooks';
+import type { DatasetSummary, DrillDownLevel, DrillDownHierarchy } from '../../types';
 
 export type { DrillDownLevel, DrillDownHierarchy };
 
@@ -33,7 +30,6 @@ export default function DrillDownConfigModal({
   onSave,
   onHide,
 }: DrillDownConfigProps) {
-  const theme = useTheme();
   const { datasets } = useDatasetList();
 
   const [hierarchies, setHierarchies] =
@@ -87,7 +83,7 @@ export default function DrillDownConfigModal({
     setHierarchies(prev =>
       prev.map(h =>
         h.id === hId
-          ? { ...h, levels: h.levels.filter((_, i) => i !== levelIdx) }
+          ? { ...h, levels: h.levels.filter((_: unknown, i: number) => i !== levelIdx) }
           : h,
       ),
     );
@@ -105,7 +101,7 @@ export default function DrillDownConfigModal({
           h.id === hId
             ? {
                 ...h,
-                levels: h.levels.map((l, i) =>
+                levels: h.levels.map((l: DrillDownLevel, i: number) =>
                   i === levelIdx ? { ...l, [field]: value } : l,
                 ),
               }
@@ -117,19 +113,19 @@ export default function DrillDownConfigModal({
   );
 
   const getColumnsForDataset = useCallback(
-    (datasetId: number) =>
-      datasets
-        .find(d => d.id === datasetId)
-        ?.columns.map(c => ({
-          value: c.column_name,
-          label: `${c.column_name} (${c.type})`,
-        })) ?? [],
+    (datasetId: number) => {
+      const ds = datasets.find((d: DatasetSummary) => d.id === datasetId);
+      return (ds?.columns ?? []).map((c: { column_name: string; type: string }) => ({
+        value: c.column_name,
+        label: `${c.column_name} (${c.type ?? ''})`,
+      }));
+    },
     [datasets],
   );
 
   const datasetOptions = useMemo(
     () =>
-      datasets.map(d => ({
+      datasets.map((d: DatasetSummary) => ({
         value: d.id,
         label: `${d.table_name} (${d.database?.database_name ?? 'DB'})`,
       })),
@@ -138,33 +134,30 @@ export default function DrillDownConfigModal({
 
   const handleSave = useCallback(() => {
     const valid = hierarchies.filter(
-      h => h.name && h.levels.length >= 2 && h.levels.every(l => l.dataset_id && l.column_name),
+      h => h.name && h.levels.length >= 2 && h.levels.every((l: DrillDownLevel) => l.dataset_id && l.column_name),
     );
     onSave(valid);
   }, [hierarchies, onSave]);
 
   return (
-    <Modal
-      show={show}
-      onHide={onHide}
-      title="Configure Drill-Down Hierarchies"
-      footer={
-        <>
-          <Button buttonSize="sm" buttonStyle="secondary" onClick={onHide}>
-            Cancel
-          </Button>
-          <Button buttonSize="sm" buttonStyle="primary" onClick={handleSave}>
-            Save
-          </Button>
-        </>
-      }
-      style={{ width: 700 }}
-    >
+    <>
+    {show && (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', zIndex: 9999,
+      }}>
+        <div style={{
+          background: '#fff', borderRadius: 8, padding: 24, width: 700,
+          maxHeight: '80vh', overflowY: 'auto',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        }}>
+          <h3 style={{ margin: '0 0 16px 0' }}>Configure Drill-Down Hierarchies</h3>
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: theme.gridUnit * 4,
+          gap: 16,
           maxHeight: '60vh',
           overflowY: 'auto',
         }}
@@ -173,17 +166,17 @@ export default function DrillDownConfigModal({
           <div
             key={hierarchy.id}
             style={{
-              border: `1px solid ${theme.colors.grayscale.light4}`,
-              borderRadius: theme.borderRadius,
-              padding: theme.gridUnit * 3,
+              border: '1px solid #e8e8e8',
+              borderRadius: 4,
+              padding: 12,
             }}
           >
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: theme.gridUnit * 2,
-                marginBottom: theme.gridUnit * 2,
+                gap: 8,
+                marginBottom: 8,
               }}
             >
               <Input
@@ -195,7 +188,7 @@ export default function DrillDownConfigModal({
                 style={{ flex: 1 }}
               />
               <Button
-                buttonSize="xs"
+                buttonSize="xsmall"
                 buttonStyle="danger"
                 onClick={() => removeHierarchy(hierarchy.id)}
               >
@@ -203,21 +196,21 @@ export default function DrillDownConfigModal({
               </Button>
             </div>
 
-            {hierarchy.levels.map((level, levelIdx) => (
+            {hierarchy.levels.map((level: DrillDownLevel, levelIdx: number) => (
               <div
                 key={levelIdx}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: theme.gridUnit * 2,
-                  marginBottom: theme.gridUnit * 2,
-                  paddingLeft: theme.gridUnit * 4,
+                  gap: 8,
+                  marginBottom: 8,
+                  paddingLeft: 16,
                 }}
               >
                 <span
                   style={{
-                    color: theme.colors.grayscale.light1,
-                    fontSize: theme.typography.sizes.xs,
+                    color: '#999',
+                    fontSize: '12px',
                     width: 20,
                   }}
                 >
@@ -236,7 +229,6 @@ export default function DrillDownConfigModal({
                     )
                   }
                   placeholder="Dataset"
-                  style={{ width: 180 }}
                 />
 
                 <Select
@@ -255,7 +247,6 @@ export default function DrillDownConfigModal({
                     )
                   }
                   placeholder="Column"
-                  style={{ width: 160 }}
                 />
 
                 <Input
@@ -273,7 +264,7 @@ export default function DrillDownConfigModal({
                 />
 
                 <Button
-                  buttonSize="xs"
+                  buttonSize="xsmall"
                   buttonStyle="danger"
                   onClick={() => removeLevel(hierarchy.id, levelIdx)}
                 >
@@ -283,10 +274,10 @@ export default function DrillDownConfigModal({
             ))}
 
             <Button
-              buttonSize="xs"
+              buttonSize="xsmall"
               buttonStyle="tertiary"
               onClick={() => addLevel(hierarchy.id)}
-              style={{ marginLeft: theme.gridUnit * 4 }}
+              style={{ marginLeft: 16 }}
             >
               + Add Level
             </Button>
@@ -294,13 +285,20 @@ export default function DrillDownConfigModal({
         ))}
 
         <Button
-          buttonSize="sm"
+          buttonSize="small"
           buttonStyle="primary"
           onClick={addHierarchy}
         >
           + Add Hierarchy
         </Button>
       </div>
-    </Modal>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+            <Button buttonSize="small" buttonStyle="secondary" onClick={onHide}>Cancel</Button>
+            <Button buttonSize="small" buttonStyle="primary" onClick={handleSave}>Save Hierarchy</Button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

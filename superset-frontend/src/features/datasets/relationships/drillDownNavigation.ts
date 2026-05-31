@@ -11,7 +11,6 @@
  */
 
 import { useCallback, useState } from 'react';
-import { SupersetClient } from '@superset-ui/core';
 import type { DrillDownLevel, DrillDownHierarchy } from './types';
 
 // ---------------------------------------------------------------------------

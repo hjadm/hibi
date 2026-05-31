@@ -12,7 +12,7 @@
  * and limitations under the License.
  */
 
-import { renderHook, act } from '@testing-library/react-hooks';
+import { renderHook, act } from '@testing-library/react';
 import { useDrillDownNavigation } from 'src/features/datasets/relationships/drillDownNavigation';
 import type { DrillDownHierarchy } from 'src/features/datasets/relationships/types';
 

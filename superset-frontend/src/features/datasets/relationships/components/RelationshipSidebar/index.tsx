@@ -2,9 +2,9 @@
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
+ * regarding copyright ownership.  This ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file that was agreed to
+ * "License"); you may not use this file except be agreed to
  * by you in writing, software distributed under the License
  * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
  * CONDITIONS OF ANY KIND, either express or implied.  See
@@ -13,16 +13,15 @@
  */
 
 import { useState, useCallback } from 'react';
-import { useTheme } from '@apache-superset/core/theme';
-import { Select, Input, Button } from '@superset-ui/core/components';
+import { Button, Input, Select } from '@superset-ui/core/components';
 import type {
   DatasetRelationship,
   RelationshipType,
   JoinType,
   RelationshipColumn,
-} from '../types';
+} from '../../types';
+import type { DatasetSummary } from '../../types';
 import ColumnPickerModal from '../ColumnPickerModal';
-import type { DatasetSummary } from '../types';
 
 interface RelationshipSidebarProps {
   relationship: DatasetRelationship | null;
@@ -55,7 +54,6 @@ export default function RelationshipSidebar({
   onDelete,
   onClose,
 }: RelationshipSidebarProps) {
-  const theme = useTheme();
   const [saving, setSaving] = useState(false);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
 
@@ -108,13 +106,21 @@ export default function RelationshipSidebar({
     return (
       <div
         style={{
-          padding: theme.gridUnit * 4,
-          color: theme.colors.grayscale.light1,
-          textAlign: 'center',
-          fontSize: theme.typography.sizes.s,
+          padding: 16,
+          color: '#666',
+          fontSize: '13px',
         }}
       >
-        Select a relationship on the canvas to view its details.
+        <h4 style={{ margin: '0 0 12px 0', color: '#333' }}>Dataset Relationships</h4>
+        <p style={{ margin: '0 0 8px 0' }}>
+          <strong>Drag a connection</strong> between two dataset nodes on the canvas to create a new relationship.
+        </p>
+        <p style={{ margin: '0 0 8px 0', color: '#999' }}>
+          Click an edge (line) to view or edit a relationship.
+        </p>
+        <p style={{ margin: '0', color: '#999' }}>
+          Each node shows the dataset name and its columns.
+        </p>
       </div>
     );
   }
@@ -124,12 +130,12 @@ export default function RelationshipSidebar({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: theme.gridUnit * 3,
-        padding: theme.gridUnit * 4,
+        gap: 12,
+        padding: 16,
         height: '100%',
         overflowY: 'auto',
-        fontFamily: theme.typography.families.sansSerif,
-        fontSize: theme.typography.sizes.s,
+        fontFamily: 'inherit',
+        fontSize: '13px',
       }}
     >
       {/* Header */}
@@ -138,14 +144,14 @@ export default function RelationshipSidebar({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          borderBottom: `1px solid ${theme.colors.grayscale.light4}`,
-          paddingBottom: theme.gridUnit * 2,
+          borderBottom: '1px solid #e8e8e8',
+          paddingBottom: 8,
         }}
       >
-        <h4 style={{ margin: 0, fontSize: theme.typography.sizes.l }}>
+        <h4 style={{ margin: 0, fontSize: '16px' }}>
           Relationship #{relationship.id}
         </h4>
-        <Button buttonSize="xs" buttonStyle="secondary" onClick={onClose}>
+        <Button buttonSize="xsmall" buttonStyle="secondary" onClick={onClose}>
           ✕
         </Button>
       </div>
@@ -153,16 +159,16 @@ export default function RelationshipSidebar({
       {/* Datasets info */}
       <div
         style={{
-          background: theme.colors.grayscale.light5,
-          padding: theme.gridUnit * 3,
-          borderRadius: theme.borderRadius,
+          background: '#fafafa',
+          padding: 12,
+          borderRadius: 4,
         }}
       >
-        <div style={{ marginBottom: theme.gridUnit }}>
+        <div style={{ marginBottom: 4 }}>
           <strong>Source:</strong>{' '}
           {sourceDataset?.table_name ?? `Dataset #${relationship.source_dataset_id}`}
           {relationship.is_cross_database && (
-            <span style={{ color: theme.colors.warning.dark1, marginLeft: 8 }}>
+            <span style={{ color: '#b38f00', marginLeft: 8 }}>
               ⚡ Cross-DB
             </span>
           )}
@@ -195,7 +201,7 @@ export default function RelationshipSidebar({
         <Select
           value={relType}
           options={RELATIONSHIP_TYPE_OPTIONS}
-          onChange={(v: unknown) => setRelType(v as RelationshipType)}
+          onChange={(v: string) => setRelType(v as RelationshipType)}
         />
       </div>
 
@@ -207,7 +213,7 @@ export default function RelationshipSidebar({
         <Select
           value={joinType}
           options={JOIN_TYPE_OPTIONS}
-          onChange={(v: unknown) => setJoinType(v as JoinType)}
+          onChange={(v: string) => setJoinType(v as JoinType)}
         />
       </div>
 
@@ -244,12 +250,12 @@ export default function RelationshipSidebar({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: theme.gridUnit * 2,
+            marginBottom: 8,
           }}
         >
           <strong>Column Mappings ({columns.length})</strong>
           <Button
-            buttonSize="xs"
+            buttonSize="xsmall"
             buttonStyle="primary"
             onClick={() => setShowColumnPicker(true)}
           >
@@ -259,15 +265,15 @@ export default function RelationshipSidebar({
         {columns.length > 0 ? (
           <div
             style={{
-              background: theme.colors.grayscale.light5,
-              borderRadius: theme.borderRadius,
-              padding: theme.gridUnit * 2,
+              background: '#fafafa',
+              borderRadius: 4,
+              padding: 8,
             }}
           >
             {columns.map((col, i) => (
               <div
                 key={col.source_column_name + col.target_column_name + i}
-                style={{ fontSize: theme.typography.sizes.xs, marginBottom: 4 }}
+                style={{ fontSize: '12px', marginBottom: 4 }}
               >
                 <span style={{ fontWeight: 'bold' }}>
                   {col.source_column_name}
@@ -280,16 +286,16 @@ export default function RelationshipSidebar({
             ))}
           </div>
         ) : (
-          <div style={{ color: theme.colors.grayscale.light1 }}>
+          <div style={{ color: '#999' }}>
             No column mappings configured.
           </div>
         )}
       </div>
 
       {/* Actions */}
-      <div style={{ display: 'flex', gap: theme.gridUnit * 2, marginTop: 'auto' }}>
+      <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
         <Button
-          buttonSize="sm"
+          buttonSize="small"
           buttonStyle="primary"
           onClick={handleSave}
           disabled={saving}
@@ -297,7 +303,7 @@ export default function RelationshipSidebar({
           {saving ? 'Saving…' : 'Save Changes'}
         </Button>
         <Button
-          buttonSize="sm"
+          buttonSize="small"
           buttonStyle="danger"
           onClick={handleDelete}
           disabled={saving}

@@ -2,9 +2,9 @@
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
+ * regarding copyright ownership.  This ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file that was agreed to
+ * "License"); you may not use this file except be agreed to
  * by you in writing, software distributed under the License
  * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
  * CONDITIONS OF ANY KIND, either express or implied.  See
@@ -19,8 +19,7 @@ import {
   getSmoothStepPath,
   type EdgeProps,
 } from '@xyflow/react';
-import { useTheme } from '@apache-superset/core/theme';
-import type { RelationshipEdgeData } from '../types';
+import type { RelationshipEdge as RelationshipEdgeType } from '../../types';
 
 /**
  * Relationship type → human-readable label.
@@ -48,8 +47,7 @@ function RelationshipEdgeComponent({
   selected,
   style,
   markerEnd,
-}: EdgeProps<RelationshipEdgeData>) {
-  const theme = useTheme();
+}: EdgeProps<RelationshipEdgeType>) {
   const rel = data?.relationship;
 
   const [edgePath, labelX, labelY] = getSmoothStepPath({
@@ -64,23 +62,27 @@ function RelationshipEdgeComponent({
 
   const isCrossDb = rel?.is_cross_database ?? false;
   const color = isCrossDb
-    ? theme.colors.warning.base
+    ? '#fcc700'
     : selected
-      ? theme.colors.primary.base
-      : theme.colors.grayscale.light2;
+      ? '#2893B3'
+      : '#bbb';
 
   const cardinality = rel
     ? CARDINALITY_LABEL[rel.relationship_type] ?? '?'
     : '';
   const joinLabel = rel?.join_type ?? '';
 
+  // Build column pair labels
+  const columnLabels = rel?.columns
+    ?.map(c => `${c.source_column_name} = ${c.target_column_name}`)
+    ?.join(', ') ?? '';
   return (
     <>
       <BaseEdge
         id={id}
         path={edgePath}
         style={{
-          ...style,
+          ...(style as React.CSSProperties),
           stroke: color,
           strokeWidth: selected ? 2.5 : 1.5,
         }}
@@ -92,13 +94,13 @@ function RelationshipEdgeComponent({
             position: 'absolute',
             transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             pointerEvents: 'all',
-            fontSize: theme.typography.sizes.xs,
-            fontFamily: theme.typography.families.sansSerif,
-            background: theme.colors.grayscale.light5,
+            fontSize: '12px',
+            fontFamily: 'inherit',
+            background: '#fafafa',
             border: `1px solid ${color}`,
-            borderRadius: theme.borderRadius,
-            padding: `2px ${theme.gridUnit * 2}px`,
-            color: theme.colors.grayscale.dark1,
+            borderRadius: 4,
+            padding: '2px 8px',
+            color: '#333',
             whiteSpace: 'nowrap',
           }}
           className="nodrag nopan"
@@ -108,18 +110,23 @@ function RelationshipEdgeComponent({
             <span
               style={{
                 marginLeft: 4,
-                color: theme.colors.grayscale.light1,
-                fontSize: theme.typography.sizes.xxxs,
+                color: '#999',
+                fontSize: '10px',
               }}
             >
               {joinLabel}
             </span>
           )}
+          {columnLabels && (
+            <div style={{ fontSize: '10px', color: '#2893B3', marginTop: 2 }}>
+              {columnLabels}
+            </div>
+          )}
           {isCrossDb && (
             <span
               style={{
                 marginLeft: 4,
-                color: theme.colors.warning.dark1,
+                color: '#b38f00',
               }}
               title="Cross-database"
             >
