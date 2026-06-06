@@ -4,12 +4,17 @@
  * distributed with this work for additional information
  * regarding copyright ownership.  The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except be agreed to
- * by you writing, software distributed under the License
- * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
- * CONDITIONS OF ANY KIND, either express or implied.  See
- * the License for the specific language governing permissions
- * and limitations under the License.
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 import {
@@ -32,7 +37,7 @@ import {
   type OnEdgesChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Select } from '@superset-ui/core/components';
+import { Button } from '@superset-ui/core/components';
 import { DatasetNode } from '../DatasetNode';
 import { RelationshipEdge } from '../RelationshipEdge';
 import RelationshipSidebar from '../RelationshipSidebar';
@@ -62,7 +67,11 @@ const nodeTypes = { dataset: DatasetNode } as any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const edgeTypes = { relationship: RelationshipEdge } as any;
 
-function datasetsToNodes(
+/**
+ * Auto-layout algorithm: group datasets by database → schema,
+ * lay out in a grid with source datasets left, targets right.
+ */
+function computeAutoLayout(
   datasets: DatasetSummary[],
   relationships: DatasetRelationship[],
   manuallyAddedIds: Set<number>,
@@ -77,6 +86,7 @@ function datasetsToNodes(
   const visible = datasets.filter(ds => relatedIds.has(ds.id));
   if (visible.length === 0) return [];
 
+  // Build group key: database::schema
   const groupKey = (ds: DatasetSummary) =>
     `${ds.database?.database_name ?? 'unknown'}::${ds.schema ?? 'public'}`;
 
@@ -91,11 +101,21 @@ function datasetsToNodes(
   const nodes: DatasetNodeType[] = [];
   let groupX = 0;
   const COLS_PER_GROUP = 4;
-  const X_SPACING = 340;
-  const Y_SPACING = 320;
+  const X_SPACING = 350;
+  const Y_SPACING = 340;
+  const GROUP_GAP = 80;
 
-  groups.forEach((groupDatasets) => {
-    groupDatasets.forEach((ds, i) => {
+  groups.forEach((groupDatasets, key) => {
+    // Sort datasets: those that are sources first, then targets, then rest
+    const sorted = [...groupDatasets].sort((a, b) => {
+      const aIsSource = relationships.some(r => r.source_dataset_id === a.id);
+      const bIsSource = relationships.some(r => r.source_dataset_id === b.id);
+      if (aIsSource && !bIsSource) return -1;
+      if (!aIsSource && bIsSource) return 1;
+      return a.table_name.localeCompare(b.table_name);
+    });
+
+    sorted.forEach((ds, i) => {
       nodes.push({
         id: `dataset-${ds.id}`,
         type: 'dataset',
@@ -109,7 +129,10 @@ function datasetsToNodes(
         },
       });
     });
-    groupX += COLS_PER_GROUP * X_SPACING + 100;
+
+    // Compute next group X position
+    const groupWidth = Math.min(sorted.length, COLS_PER_GROUP) * X_SPACING;
+    groupX += groupWidth + GROUP_GAP;
   });
 
   return nodes;
@@ -131,7 +154,7 @@ function relationshipsToEdges(
 }
 
 // ---------------------------------------------------------------------------
-// Hierarchical Dataset Selector
+// Hierarchical Dataset Selector (collapsible tree)
 // ---------------------------------------------------------------------------
 
 interface HierarchicalSelectorProps {
@@ -141,137 +164,359 @@ interface HierarchicalSelectorProps {
   onFilterChange: (database: string | undefined, schema: string | undefined) => void;
 }
 
+interface SchemaGroup {
+  schema: string;
+  datasets: DatasetSummary[];
+  collapsed: boolean;
+}
+
+interface DbGroup {
+  dbName: string;
+  schemas: SchemaGroup[];
+  collapsed: boolean;
+}
+
 function HierarchicalDatasetSelector({
   enrichedDatasets,
   onAddDataset,
   relatedIds,
   onFilterChange,
 }: HierarchicalSelectorProps) {
+  // Build hierarchical tree: Database → Schema → Datasets
+  const tree = useMemo(() => {
+    const dbMap = new Map<string, Map<string, DatasetSummary[]>>();
+
+    enrichedDatasets.forEach(ds => {
+      const dbName = ds.database?.database_name ?? 'Unknown';
+      const schemaName = ds.schema ?? 'public';
+
+      if (!dbMap.has(dbName)) {
+        dbMap.set(dbName, new Map());
+      }
+      const schemaMap = dbMap.get(dbName)!;
+      if (!schemaMap.has(schemaName)) {
+        schemaMap.set(schemaName, []);
+      }
+      schemaMap.get(schemaName)!.push(ds);
+    });
+
+    const result: DbGroup[] = [];
+    dbMap.forEach((schemaMap, dbName) => {
+      const schemas: SchemaGroup[] = [];
+      schemaMap.forEach((datasets, schema) => {
+        schemas.push({
+          schema,
+          datasets: datasets.sort((a, b) => a.table_name.localeCompare(b.table_name)),
+          collapsed: false,
+        });
+      });
+      result.push({
+        dbName,
+        schemas: schemas.sort((a, b) => a.schema.localeCompare(b.schema)),
+        collapsed: false,
+      });
+    });
+
+    return result.sort((a, b) => a.dbName.localeCompare(b.dbName));
+  }, [enrichedDatasets]);
+
+  const [collapsedDbs, setCollapsedDbs] = useState<Set<string>>(new Set());
+  const [collapsedSchemas, setCollapsedSchemas] = useState<Set<string>>(new Set());
   const [selectedDb, setSelectedDb] = useState<string | undefined>(undefined);
   const [selectedSchema, setSelectedSchema] = useState<string | undefined>(undefined);
 
-  // Extract unique databases
-  const databases = useMemo(() => {
-    const dbNames = new Set<string>();
-    enrichedDatasets.forEach(ds => {
-      const name = ds.database?.database_name;
-      if (name) dbNames.add(name);
+  const toggleDb = useCallback((dbName: string) => {
+    setCollapsedDbs(prev => {
+      const next = new Set(prev);
+      if (next.has(dbName)) next.delete(dbName);
+      else next.add(dbName);
+      return next;
     });
-    return Array.from(dbNames).sort().map(name => ({
-      value: name,
-      label: name,
-    }));
-  }, [enrichedDatasets]);
+  }, []);
 
-  // Extract unique schemas filtered by selected database
-  const schemas = useMemo(() => {
-    if (!selectedDb) return [];
-    const schemaNames = new Set<string>();
-    enrichedDatasets
-      .filter(ds => ds.database?.database_name === selectedDb)
-      .forEach(ds => {
-        const s = ds.schema ?? 'public';
-        schemaNames.add(s);
-      });
-    return Array.from(schemaNames).sort().map(name => ({
-      value: name,
-      label: name,
-    }));
-  }, [enrichedDatasets, selectedDb]);
+  const toggleSchema = useCallback((schemaKey: string) => {
+    setCollapsedSchemas(prev => {
+      const next = new Set(prev);
+      if (next.has(schemaKey)) next.delete(schemaKey);
+      else next.add(schemaKey);
+      return next;
+    });
+  }, []);
 
-  // Filter datasets by database + schema
-  const filteredDatasets = useMemo(() => {
-    if (!selectedDb || !selectedSchema) return [];
-    return enrichedDatasets.filter(
-      ds =>
-        ds.database?.database_name === selectedDb &&
-        (ds.schema ?? 'public') === selectedSchema,
-    );
-  }, [enrichedDatasets, selectedDb, selectedSchema]);
-
-  // Reset schema when database changes
-  const handleDbChange = useCallback((value: string) => {
-    setSelectedDb(value || undefined);
+  const handleDbClick = useCallback((dbName: string) => {
+    const newDb = selectedDb === dbName ? undefined : dbName;
+    setSelectedDb(newDb);
     setSelectedSchema(undefined);
-    onFilterChange(value || undefined, undefined);
-  }, [onFilterChange]);
+    onFilterChange(newDb, undefined);
+  }, [selectedDb, onFilterChange]);
 
-  const handleSchemaChange = useCallback((value: string) => {
-    setSelectedSchema(value || undefined);
-    onFilterChange(selectedDb, value || undefined);
-  }, [onFilterChange, selectedDb]);
+  const handleSchemaClick = useCallback(
+    (dbName: string, schema: string) => {
+      const newSchema = selectedDb === dbName && selectedSchema === schema ? undefined : schema;
+      setSelectedSchema(newSchema);
+      onFilterChange(selectedDb, newSchema);
+    },
+    [selectedDb, selectedSchema, onFilterChange],
+  );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ fontSize: 12, color: '#999', marginBottom: 2 }}>Add Dataset to Canvas</div>
-      <Select
-        value={selectedDb}
-        options={databases}
-        onChange={handleDbChange}
-        placeholder="Select database…"
-      />
-      {selectedDb && (
-        <Select
-          value={selectedSchema}
-          options={schemas}
-          onChange={handleSchemaChange}
-          placeholder="Select schema…"
-        />
-      )}
-      {selectedDb && selectedSchema && filteredDatasets.length > 0 && (
-        <div
-          style={{
-            maxHeight: 200,
-            overflowY: 'auto',
-            border: '1px solid #e8e8e8',
-            borderRadius: 4,
-            background: '#fff',
-          }}
-        >
-          {filteredDatasets.map(ds => {
-            const isAdded = relatedIds.has(ds.id);
-            return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+        fontSize: '12px',
+      }}
+    >
+      <div
+        style={{
+          fontSize: '11px',
+          color: '#999',
+          marginBottom: 4,
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+        }}
+      >
+        Datasets
+      </div>
+
+      {/* Collapsible Quick Select */}
+      <div
+        style={{
+          marginBottom: 8,
+          borderBottom: '1px solid #f0f0f0',
+          paddingBottom: 4,
+        }}
+      >
+        {/* Database filter controls */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+          {tree.map(db => (
+            <button
+              key={db.dbName}
+              type="button"
+              onClick={() => handleDbClick(db.dbName)}
+              style={{
+                fontSize: '10px',
+                padding: '2px 6px',
+                border: `1px solid ${selectedDb === db.dbName ? '#2893B3' : '#e0e0e0'}`,
+                borderRadius: 4,
+                background: selectedDb === db.dbName ? '#e0f0f5' : '#fafafa',
+                color: selectedDb === db.dbName ? '#1a6d85' : '#666',
+                cursor: 'pointer',
+                fontWeight: selectedDb === db.dbName ? 600 : 400,
+              }}
+            >
+              {db.dbName}
+            </button>
+          ))}
+        </div>
+
+        {/* Schema filters (shown when DB is selected) */}
+        {selectedDb && (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
+            {tree
+              .find(db => db.dbName === selectedDb)
+              ?.schemas.map(sch => (
+                <button
+                  key={`${selectedDb}-${sch.schema}`}
+                  type="button"
+                  onClick={() => handleSchemaClick(selectedDb, sch.schema)}
+                  style={{
+                    fontSize: '9px',
+                    padding: '1px 5px',
+                    border: `1px solid ${selectedSchema === sch.schema ? '#2893B3' : '#e0e0e0'}`,
+                    borderRadius: 3,
+                    background: selectedSchema === sch.schema ? '#e0f0f5' : '#fafafa',
+                    color: selectedSchema === sch.schema ? '#1a6d85' : '#888',
+                    cursor: 'pointer',
+                    fontWeight: selectedSchema === sch.schema ? 600 : 400,
+                  }}
+                >
+                  {sch.schema}
+                </button>
+              ))}
+          </div>
+        )}
+      </div>
+
+      {/* Dataset tree */}
+      <div
+        style={{
+          maxHeight: 300,
+          overflowY: 'auto',
+          border: '1px solid #e8e8e8',
+          borderRadius: 6,
+          background: '#fff',
+        }}
+      >
+        {tree.map(db => {
+          const isDbCollapsed = collapsedDbs.has(db.dbName);
+          const isDbSelected = selectedDb === db.dbName;
+
+          return (
+            <div key={db.dbName}>
+              {/* Database header */}
               <div
-                key={ds.id}
-                onClick={() => {
-                  if (!isAdded) onAddDataset(ds.id);
-                }}
+                onClick={() => toggleDb(db.dbName)}
                 style={{
                   padding: '6px 10px',
-                  fontSize: '12px',
-                  cursor: isAdded ? 'default' : 'pointer',
-                  background: isAdded ? '#f5f5f5' : '#fff',
-                  color: isAdded ? '#999' : '#333',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: isDbSelected ? '#1a6d85' : '#555',
+                  background: isDbSelected ? '#e0f0f5' : '#fafafa',
                   borderBottom: '1px solid #f0f0f0',
+                  cursor: 'pointer',
                   display: 'flex',
-                  justifyContent: 'space-between',
                   alignItems: 'center',
-                }}
-                onMouseEnter={e => {
-                  if (!isAdded) (e.currentTarget as HTMLDivElement).style.background = '#e0f0f5';
-                }}
-                onMouseLeave={e => {
-                  if (!isAdded) (e.currentTarget as HTMLDivElement).style.background = '#fff';
+                  gap: 4,
+                  userSelect: 'none',
                 }}
               >
-                <span>{ds.table_name}</span>
-                {isAdded && <span style={{ color: '#2893B3', fontSize: '11px' }}>✓ added</span>}
+                <span style={{ fontSize: '10px', color: '#999', width: 14 }}>
+                  {isDbCollapsed ? '▶' : '▼'}
+                </span>
+                <span style={{ flex: 1 }}>{db.dbName}</span>
+                <span
+                  style={{
+                    fontSize: '10px',
+                    color: '#999',
+                    background: '#f0f0f0',
+                    padding: '0 5px',
+                    borderRadius: 8,
+                  }}
+                >
+                  {db.schemas.reduce((sum, s) => sum + s.datasets.length, 0)}
+                </span>
               </div>
-            );
-          })}
-        </div>
-      )}
-      {selectedDb && selectedSchema && filteredDatasets.length === 0 && (
-        <div style={{ fontSize: '12px', color: '#999', padding: '4px 0' }}>
-          No datasets in this schema.
-        </div>
-      )}
+
+              {/* Schema items (collapsible) */}
+              {!isDbCollapsed &&
+                db.schemas.map(sch => {
+                  const schemaKey = `${db.dbName}-${sch.schema}`;
+                  const isSchCollapsed = collapsedSchemas.has(schemaKey);
+                  const isSchemaSelected = selectedDb === db.dbName && selectedSchema === sch.schema;
+
+                  return (
+                    <div key={schemaKey}>
+                      {/* Schema header */}
+                      <div
+                        onClick={() => toggleSchema(schemaKey)}
+                        style={{
+                          padding: '4px 10px 4px 24px',
+                          fontSize: '10px',
+                          color: '#888',
+                          background: isSchemaSelected ? '#f0f7fa' : '#fff',
+                          borderBottom: '1px solid #f5f5f5',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          userSelect: 'none',
+                        }}
+                      >
+                        <span style={{ fontSize: '8px', color: '#ccc', width: 12 }}>
+                          {isSchCollapsed ? '▶' : '▼'}
+                        </span>
+                        <span>{sch.schema}</span>
+                        <span
+                          style={{
+                            fontSize: '9px',
+                            color: '#bbb',
+                            marginLeft: 'auto',
+                          }}
+                        >
+                          {sch.datasets.length} datasets
+                        </span>
+                      </div>
+
+                      {/* Dataset items (collapsible) */}
+                      {!isSchCollapsed &&
+                        sch.datasets.map(ds => {
+                          const isAdded = relatedIds.has(ds.id);
+                          return (
+                            <div
+                              key={ds.id}
+                              onClick={() => {
+                                if (!isAdded) {
+                                  onAddDataset(ds.id);
+                                }
+                              }}
+                              style={{
+                                padding: '4px 10px 4px 36px',
+                                fontSize: '11px',
+                                cursor: isAdded ? 'default' : 'pointer',
+                                background: isAdded ? '#f9f9f9' : '#fff',
+                                color: isAdded ? '#bbb' : '#444',
+                                borderBottom: '1px solid #f5f5f5',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                transition: 'background 0.1s ease',
+                              }}
+                              onMouseEnter={e => {
+                                if (!isAdded) {
+                                  (e.currentTarget as HTMLDivElement).style.background = '#e0f0f5';
+                                }
+                              }}
+                              onMouseLeave={e => {
+                                if (!isAdded) {
+                                  (e.currentTarget as HTMLDivElement).style.background = '#fff';
+                                }
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: '50%',
+                                  background: isAdded ? '#52c41a' : '#e0e0e0',
+                                  display: 'inline-block',
+                                  flexShrink: 0,
+                                }}
+                              />
+                              <span
+                                style={{
+                                  flex: 1,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {ds.table_name}
+                              </span>
+                              {isAdded && (
+                                <span
+                                  style={{
+                                    fontSize: '9px',
+                                    color: '#52c41a',
+                                  }}
+                                >
+                                  ✓
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  );
+                })}
+            </div>
+          );
+        })}
+
+        {tree.length === 0 && (
+          <div style={{ padding: 16, color: '#999', fontSize: '12px', textAlign: 'center' }}>
+            No datasets available.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Main component
+// Main Component
 // ---------------------------------------------------------------------------
 
 interface RelationshipCanvasProps {
@@ -331,10 +576,10 @@ export default function RelationshipCanvas({
     );
   }, [relationships, filteredDatasets, filterDb, filterSchema]);
 
-  const loading = relLoading || dsLoading || enrichedDatasets.length === 0;
+  const loading = relLoading || dsLoading;
 
   const initialNodes = useMemo(
-    () => datasetsToNodes(filteredDatasets, filteredRelationships, manuallyAddedIds),
+    () => computeAutoLayout(filteredDatasets, filteredRelationships, manuallyAddedIds),
     [filteredDatasets, filteredRelationships, manuallyAddedIds],
   );
   const initialEdges = useMemo(
@@ -346,9 +591,9 @@ export default function RelationshipCanvas({
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   useEffect(() => {
-    setNodes(datasetsToNodes(filteredDatasets, filteredRelationships, manuallyAddedIds));
+    setNodes(computeAutoLayout(filteredDatasets, filteredRelationships, manuallyAddedIds));
     setEdges(relationshipsToEdges(relationships));
-  }, [filteredDatasets, filteredRelationships, manuallyAddedIds, setNodes, setEdges]);
+  }, [filteredDatasets, filteredRelationships, manuallyAddedIds, setNodes, setEdges, relationships]);
 
   // Dataset selector: compute related IDs for showing "added" state
   const relatedIds = useMemo(() => {
@@ -539,6 +784,11 @@ export default function RelationshipCanvas({
     }];
   }, [pendingConnection]);
 
+  // Auto-layout handler
+  const handleAutoLayout = useCallback(() => {
+    setNodes(computeAutoLayout(filteredDatasets, filteredRelationships, manuallyAddedIds));
+  }, [filteredDatasets, filteredRelationships, manuallyAddedIds, setNodes]);
+
   if (loading) {
     return (
       <div
@@ -567,19 +817,19 @@ export default function RelationshipCanvas({
       }}
     >
       {/* Sidebar LEFT */}
-      {(selectedRelationship || !selectedEdgeId) && (
+      {(!selectedRelationship || !selectedEdgeId) && (
         <div
           style={{
             width: 320,
             borderRight: '1px solid #e8e8e8',
             background: '#fafafa',
-            overflowY: 'auto',
+            overflowY: 'hidden',
             display: 'flex',
             flexDirection: 'column',
           }}
         >
           {/* Hierarchical Add Dataset selector */}
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid #e8e8e8' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid #e8e8e8', flexShrink: 0 }}>
             <HierarchicalDatasetSelector
               enrichedDatasets={enrichedDatasets}
               onAddDataset={handleAddDataset}
@@ -587,25 +837,63 @@ export default function RelationshipCanvas({
               onFilterChange={handleFilterChange}
             />
           </div>
-          <RelationshipSidebar
-            relationship={selectedRelationship}
-            sourceDataset={sourceDs}
-            targetDataset={targetDs}
-            onUpdate={handleUpdateRelationship}
-            onDelete={handleDeleteRelationship}
-            onClose={() => {
-              setSelectedRelationship(null);
-              setSelectedEdgeId(null);
-            }}
-          />
+          <div style={{ flex: 1, overflow: 'hidden' }}>
+            <RelationshipSidebar
+              relationship={selectedRelationship}
+              sourceDataset={sourceDs}
+              targetDataset={targetDs}
+              allRelationships={relationships}
+              allDatasets={enrichedDatasets}
+              onUpdate={handleUpdateRelationship}
+              onDelete={handleDeleteRelationship}
+              onClose={() => {
+                setSelectedRelationship(null);
+                setSelectedEdgeId(null);
+              }}
+              onSelectRelationship={(rel) => {
+                setSelectedRelationship(rel);
+                setSelectedEdgeId(`relationship-${rel.id}`);
+              }}
+              pendingConnection={pendingConnection ? { sourceId: pendingConnection.sourceId, targetId: pendingConnection.targetId } : null}
+              onCreateFromPending={handleCreateRelationship}
+              onCancelPending={() => {
+                setPendingConnection(null);
+                setShowNewRelPicker(false);
+              }}
+            />
+          </div>
         </div>
       )}
 
       {/* Canvas area */}
       <div
         ref={reactFlowWrapper}
-        style={{ flex: 1, height: '100%' }}
+        style={{ flex: 1, height: '100%', position: 'relative' }}
       >
+        {/* Auto Layout button */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            zIndex: 5,
+          }}
+        >
+          <Button
+            buttonSize="xsmall"
+            buttonStyle="tertiary"
+            onClick={handleAutoLayout}
+            style={{
+              fontSize: '11px',
+              background: '#fff',
+              border: '1px solid #d9d9d9',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+            }}
+          >
+            Auto Layout
+          </Button>
+        </div>
+
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -621,21 +909,37 @@ export default function RelationshipCanvas({
           fitViewOptions={{ padding: 0.2 }}
           style={{ background: '#fafafa' }}
         >
-          <Controls />
+          <Controls
+            style={{
+              borderRadius: 8,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            }}
+          />
           <MiniMap
-            nodeColor={n =>
-              n.selected ? '#2893B3' : '#ccc'
-            }
+            nodeColor={(n) => {
+              const ds = (n as DatasetNodeType)?.data?.dataset;
+              if (ds?.database?.database_name) {
+                // Use database name for color
+                let hash = 0;
+                for (let i = 0; i < ds.database.database_name.length; i++) {
+                  hash = ds.database.database_name.charCodeAt(i) + ((hash << 5) - hash);
+                }
+                const hue = Math.abs(hash) % 360;
+                return `hsl(${hue}, 50%, 60%)`;
+              }
+              return n.selected ? '#2893B3' : '#ccc';
+            }}
             style={{
               background: '#fafafa',
               border: '1px solid #ddd',
+              borderRadius: 6,
             }}
           />
           <Background
             variant={BackgroundVariant.Dots}
             gap={20}
             size={1}
-            color="#ddd"
+            color="#e0e0e0"
           />
         </ReactFlow>
       </div>

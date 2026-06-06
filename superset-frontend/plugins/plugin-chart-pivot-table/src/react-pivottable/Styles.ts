@@ -18,6 +18,7 @@
  */
 
 import { css, styled } from '@apache-superset/core/theme';
+import { allModulesCSS } from '../modules';
 
 export const Styles = styled.div<{ isDashboardEditMode: boolean }>`
   ${({ theme, isDashboardEditMode }) => css`
@@ -148,5 +149,8 @@ export const Styles = styled.div<{ isDashboardEditMode: boolean }>`
       background-color: ${theme.colorFillContentHover};
       cursor: pointer;
     }
+
+    /* ============ MÓDULOS SAFIRA ============ */
+    ${allModulesCSS(theme)}
   `}
 `;

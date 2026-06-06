@@ -135,6 +135,60 @@ export interface RelationshipEdgeData extends Record<string, unknown> {
 export type RelationshipEdge = Edge<RelationshipEdgeData>;
 
 // ---------------------------------------------------------------------------
+// Sidebar tab types
+// ---------------------------------------------------------------------------
+
+export type SidebarTab = 'grid' | 'detail' | 'new';
+
+// ---------------------------------------------------------------------------
+// Color helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Deterministic color from a string (e.g., database name).
+ * Returns a pastel-ish hue for the badge.
+ */
+export function hashStringToColor(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 55%, 45%)`;
+}
+
+export function hashStringToBg(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 40%, 92%)`;
+}
+
+// ---------------------------------------------------------------------------
+// Join type colors for edges
+// ---------------------------------------------------------------------------
+
+export const JOIN_TYPE_COLORS: Record<string, string> = {
+  LEFT: '#2893B3',
+  INNER: '#52c41a',
+  RIGHT: '#fa8c16',
+  FULL: '#722ed1',
+};
+
+// ---------------------------------------------------------------------------
+// Auto-layout config
+// ---------------------------------------------------------------------------
+
+export interface LayoutGroup {
+  key: string;
+  databaseName: string;
+  schemaName: string;
+  datasets: { id: number; table_name: string }[];
+}
+
+// ---------------------------------------------------------------------------
 // API responses
 // ---------------------------------------------------------------------------
 

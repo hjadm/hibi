@@ -37,6 +37,7 @@ export default function DatasetRelationshipsPage() {
         flexDirection: 'column',
         height: 'calc(100vh - 100px)',
         padding: 16,
+        background: 'linear-gradient(135deg, #fafafa 0%, #f0f4f8 100%)',
       }}
     >
       <div
@@ -51,7 +52,7 @@ export default function DatasetRelationshipsPage() {
           <Button buttonSize="small" buttonStyle="secondary" onClick={handleBack}>
             <Icons.LeftOutlined iconSize="s" /> {t('Back to Datasets')}
           </Button>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 'bold', color: '#333' }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 'bold', color: '#222' }}>
             {t('Dataset Relationships')}
           </h2>
         </div>

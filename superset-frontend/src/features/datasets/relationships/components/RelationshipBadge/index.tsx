@@ -16,7 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { useTheme, css } from '@superset-ui/core';
 import type { DatasetRelationship } from '../../types';
 
 export interface RelationshipBadgeProps {
@@ -32,15 +31,13 @@ export interface RelationshipBadgeProps {
  * Indicates that this column is connected to another dataset via a relationship.
  *
  * Clicking the badge toggles the JOIN on/off.
- * Active badge → JOIN is enabled → column is part of an active cross-dataset query.
+ * Active badge -> JOIN is enabled -> column is part of an active cross-dataset query.
  */
 export function RelationshipBadge({
   relationship,
   joinActive,
   onToggleJoin,
 }: RelationshipBadgeProps) {
-  const theme = useTheme();
-
   const targetLabel =
     relationship.name ?? `#${relationship.target_dataset_id}`;
 
@@ -48,37 +45,25 @@ export function RelationshipBadge({
     <span
       role="button"
       tabIndex={0}
-      title={`${relationship.relationship_type} → ${targetLabel} (${relationship.join_type} JOIN)`}
-      css={css`
-        display: inline-flex;
-        align-items: center;
-        gap: 2px;
-        font-size: 9px;
-        font-weight: ${theme.fontWeightBold};
-        padding: 1px 4px;
-        border-radius: 3px;
-        cursor: pointer;
-        user-select: none;
-        transition: all 0.15s ease;
-        background-color: ${joinActive
-          ? '#059669'
-          : 'rgba(220, 38, 38, 0.08)'};
-        color: ${joinActive ? '#fff' : '#dc2626'};
-        border: 1px solid ${joinActive ? '#059669' : '#dc2626'};
-        margin-left: 4px;
-        vertical-align: middle;
-        line-height: 1;
-
-        &:hover {
-          background-color: ${joinActive ? '#047857' : 'rgba(220, 38, 38, 0.15)'};
-          border-color: ${joinActive ? '#047857' : '#b91c1c'};
-        }
-
-        &:focus-visible {
-          outline: 2px solid ${theme.colorPrimary};
-          outline-offset: 1px;
-        }
-      `}
+      title={`${relationship.relationship_type} -> ${targetLabel} (${relationship.join_type} JOIN)`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 2,
+        fontSize: 9,
+        fontWeight: 600,
+        padding: '1px 4px',
+        borderRadius: 3,
+        cursor: 'pointer',
+        userSelect: 'none',
+        transition: 'all 0.15s ease',
+        backgroundColor: joinActive ? '#059669' : 'rgba(220, 38, 38, 0.08)',
+        color: joinActive ? '#fff' : '#dc2626',
+        border: joinActive ? '1px solid #059669' : '1px solid #dc2626',
+        marginLeft: 4,
+        verticalAlign: 'middle',
+        lineHeight: 1,
+      }}
       onClick={e => {
         e.stopPropagation();
         onToggleJoin(relationship.id);
@@ -108,7 +93,7 @@ export function RelationshipBadge({
         <line x1="8" y1="17" x2="6" y2="16" />
         <line x1="16" y1="17" x2="18" y2="16" />
       </svg>
-      {joinActive ? `${targetLabel}` : `${targetLabel}`}
+      {targetLabel}
     </span>
   );
 }

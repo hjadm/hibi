@@ -16,140 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { useState, useCallback } from 'react';
-import { t, styled, css, useTheme } from '@superset-ui/core';
+import { useState } from 'react';
 import type {
   DatasetRelationship,
   ActiveJoin,
 } from '../../hooks/useExploreRelationships';
-
-const PanelContainer = styled.div`
-  ${({ theme }) => css`
-    padding: ${theme.sizeUnit * 4}px;
-    border-bottom: 1px solid ${theme.colorSplit};
-  `}
-`;
-
-const PanelHeader = styled.div`
-  ${({ theme }) => css`
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: ${theme.sizeUnit * 2}px;
-
-    h4 {
-      margin: 0;
-      font-size: ${theme.fontSize}px;
-      font-weight: ${theme.fontWeightStrong};
-    }
-  `}
-`;
-
-const RelationshipRow = styled.div<{ $enabled: boolean }>`
-  ${({ theme, $enabled }) => css`
-    display: flex;
-    align-items: center;
-    gap: ${theme.sizeUnit * 2}px;
-    padding: ${theme.sizeUnit * 2}px ${theme.sizeUnit * 3}px;
-    margin-bottom: ${theme.sizeUnit}px;
-    border-radius: ${theme.borderRadius}px;
-    background: ${$enabled
-      ? 'rgba(5, 150, 105, 0.06)'
-      : theme.colors.grayscale.light3};
-    border: 1px solid
-      ${$enabled ? 'rgba(5, 150, 105, 0.2)' : theme.colorSplit};
-    transition: all 0.15s ease;
-
-    &:hover {
-      background: ${$enabled
-        ? 'rgba(5, 150, 105, 0.1)'
-        : theme.colors.grayscale.light2};
-    }
-  `}
-`;
-
-const ToggleSwitch = styled.button<{ $active: boolean }>`
-  ${({ theme, $active }) => css`
-    width: 28px;
-    height: 16px;
-    border-radius: 8px;
-    border: none;
-    cursor: pointer;
-    padding: 2px;
-    transition: all 0.15s ease;
-    flex-shrink: 0;
-    background-color: ${$active ? '#059669' : theme.colors.grayscale.light2};
-    position: relative;
-
-    &::after {
-      content: '';
-      display: block;
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: white;
-      transition: transform 0.15s ease;
-      transform: translateX(${$active ? '12px' : '0'});
-    }
-
-    &:hover {
-      opacity: 0.85;
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${theme.colorPrimary};
-      outline-offset: 2px;
-    }
-  `}
-`;
-
-const RelationshipInfo = styled.div`
-  ${({ theme }) => css`
-    flex: 1;
-    min-width: 0;
-    font-size: ${theme.fontSizeSM}px;
-
-    .rel-name {
-      font-weight: ${theme.fontWeightStrong};
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .rel-detail {
-      color: ${theme.colors.grayscale.base};
-      font-size: ${theme.fontSizeXS}px;
-      margin-top: 1px;
-    }
-  `}
-`;
-
-const ColumnList = styled.div`
-  ${({ theme }) => css`
-    margin-top: ${theme.sizeUnit}px;
-
-    label {
-      display: inline-flex;
-      align-items: center;
-      gap: ${theme.sizeUnit}px;
-      font-size: ${theme.fontSizeXS}px;
-      padding: 1px ${theme.sizeUnit}px;
-      margin: 1px ${theme.sizeUnit}px 1px 0;
-      border-radius: 2px;
-      background: ${theme.colors.grayscale.light2};
-      cursor: pointer;
-
-      input {
-        margin: 0;
-        cursor: pointer;
-      }
-
-      &:hover {
-        background: ${theme.colors.grayscale.light1};
-      }
-    }
-  `}
-`;
+import type { RelationshipColumn } from '../../types';
 
 interface RelationshipPanelProps {
   relationships: DatasetRelationship[];
@@ -176,34 +48,44 @@ export function RelationshipPanel({
   onUpdateSelectedColumns,
 }: RelationshipPanelProps) {
   const [expanded, setExpanded] = useState(false);
-  const theme = useTheme();
 
   if (relationships.length === 0) return null;
 
   return (
-    <PanelContainer>
-      <PanelHeader>
-        <h4>{t('Relationships')}</h4>
+    <div style={{
+      padding: '16px',
+      borderBottom: '1px solid #e8e8e8',
+    }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '8px',
+      }}>
+        <h4 style={{
+          margin: 0,
+          fontSize: '13px',
+          fontWeight: 600,
+        }}>
+          Relationships
+        </h4>
         {relationships.length > 1 && (
           <button
             type="button"
             onClick={() => setExpanded(!expanded)}
-            css={css`
-              border: none;
-              background: none;
-              font-size: ${theme.fontSizeSM}px;
-              color: ${theme.colorPrimary};
-              cursor: pointer;
-              padding: 0;
-              &:hover {
-                text-decoration: underline;
-              }
-            `}
+            style={{
+              border: 'none',
+              background: 'none',
+              fontSize: '12px',
+              color: '#2893B3',
+              cursor: 'pointer',
+              padding: 0,
+            }}
           >
-            {expanded ? t('Collapse') : t('Show all')}
+            {expanded ? 'Collapse' : 'Show all'}
           </button>
         )}
-      </PanelHeader>
+      </div>
 
       {(expanded ? relationships : relationships.slice(0, 1)).map(rel => {
         const join = activeJoins.get(rel.id);
@@ -212,34 +94,106 @@ export function RelationshipPanel({
         const targetCols = availableTargetColumns.get(rel.id) ?? [];
 
         return (
-          <RelationshipRow key={rel.id} $enabled={enabled}>
-            <ToggleSwitch
-              $active={enabled}
+          <div
+            key={rel.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 12px',
+              marginBottom: '4px',
+              borderRadius: '6px',
+              background: enabled
+                ? 'rgba(5, 150, 105, 0.06)'
+                : '#fafafa',
+              border: '1px solid',
+              borderColor: enabled ? 'rgba(5, 150, 105, 0.2)' : '#e8e8e8',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = enabled
+                ? 'rgba(5, 150, 105, 0.1)'
+                : '#f0f0f0';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = enabled
+                ? 'rgba(5, 150, 105, 0.06)'
+                : '#fafafa';
+            }}
+          >
+            <button
+              type="button"
               onClick={() => onToggleJoin(rel.id)}
-              aria-label={
-                enabled
-                  ? t('Disable relationship %s', rel.id)
-                  : t('Enable relationship %s', rel.id)
-              }
-            />
-            <RelationshipInfo>
-              <div className="rel-name">
-                {rel.name ?? t('Relationship #%s', rel.id)}
+              style={{
+                width: 28,
+                height: 16,
+                borderRadius: 8,
+                border: 'none',
+                cursor: 'pointer',
+                padding: 2,
+                transition: 'all 0.15s ease',
+                flexShrink: 0,
+                backgroundColor: enabled ? '#059669' : '#e0e0e0',
+                position: 'relative',
+              }}
+            >
+              <span style={{
+                display: 'block',
+                width: 12,
+                height: 12,
+                borderRadius: '50%',
+                background: 'white',
+                transition: 'transform 0.15s ease',
+                transform: enabled ? 'translateX(12px)' : 'translateX(0)',
+              }} />
+            </button>
+
+            <div style={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: '12px',
+            }}>
+              <div style={{
+                fontWeight: 600,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
+                {rel.name ?? `Relationship #${rel.id}`}
               </div>
-              <div className="rel-detail">
-                {rel.relationship_type.replace(/_/g, ' → ')} &middot;{' '}
+              <div style={{
+                color: '#666',
+                fontSize: '11px',
+                marginTop: 1,
+              }}>
+                {rel.relationship_type.replace(/_/g, ' \u2192 ')} &middot;{' '}
                 {rel.join_type} JOIN &middot;{' '}
                 {rel.columns
-                  .map(
-                    col =>
-                      `${col.source_column_name} → ${col.target_column_name}`,
+                  ?.map(
+                    (col: RelationshipColumn) =>
+                      `${col.source_column_name} \u2192 ${col.target_column_name}`,
                   )
-                  .join(', ')}
+                  .join(', ') ?? ''}
               </div>
               {enabled && targetCols.length > 0 && (
-                <ColumnList>
+                <div style={{
+                  marginTop: '4px',
+                }}>
                   {targetCols.map(colName => (
-                    <label key={colName}>
+                    <label
+                      key={colName}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '11px',
+                        padding: '1px 4px',
+                        margin: '1px 4px 1px 0',
+                        borderRadius: 2,
+                        background: '#f0f0f0',
+                        cursor: 'pointer',
+                      }}
+                    >
                       <input
                         type="checkbox"
                         checked={selectedCols.includes(colName)}
@@ -252,20 +206,21 @@ export function RelationshipPanel({
                           } else {
                             onUpdateSelectedColumns(
                               rel.id,
-                              selectedCols.filter(c => c !== colName),
+                              selectedCols.filter((c: string) => c !== colName),
                             );
                           }
                         }}
+                        style={{ margin: 0, cursor: 'pointer' }}
                       />
                       {colName}
                     </label>
                   ))}
-                </ColumnList>
+                </div>
               )}
-            </RelationshipInfo>
-          </RelationshipRow>
+            </div>
+          </div>
         );
       })}
-    </PanelContainer>
+    </div>
   );
 }

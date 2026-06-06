@@ -964,6 +964,20 @@ class Superset(BaseSupersetView):
 
         return self.render_app_template(extra_bootstrap_data=payload)
 
+    @expose("/dataset/relationships/")
+    @event_logger.log_this
+    def dataset_relationships(self) -> FlaskResponse:
+        """Dataset Relationships management page"""
+        if not g.user or not get_user_id():
+            return redirect_to_login()
+
+        payload = {
+            "user": bootstrap_user_data(g.user, include_perms=True),
+            "common": common_bootstrap_payload(),
+        }
+
+        return self.render_app_template(extra_bootstrap_data=payload)
+
     @has_access
     @event_logger.log_this
     @expose("/sqllab/history/", methods=("GET",))

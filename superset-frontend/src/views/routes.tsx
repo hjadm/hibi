@@ -313,7 +313,7 @@ export const routes: Routes = [
     Component: DatasetCreation,
   },
   {
-    path: '/dataset/relationships/',
+    path: '/superset/dataset/relationships/',
     Component: DatasetRelationshipsPage,
   },
   {

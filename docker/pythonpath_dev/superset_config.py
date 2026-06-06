@@ -110,6 +110,7 @@ FEATURE_FLAGS = {
     "DATASET_FOLDERS": True,
     "ENABLE_EXTENSIONS": True,
     "SEMANTIC_LAYERS": True,
+    "DATASET_RELATIONSHIPS": True,
 }
 EXTENSIONS_PATH = "/app/docker/extensions"
 ALERT_REPORTS_NOTIFICATION_DRY_RUN = True
@@ -139,6 +140,9 @@ if os.getenv("CYPRESS_CONFIG") == "true":
 # Optionally import superset_config_docker.py (which will have been included on
 # the PYTHONPATH) in order to allow for local settings to be overridden
 #
+# Disable CSRF for dev (overrides superset/config.py)
+WTF_CSRF_ENABLED = False
+
 try:
     import superset_config_docker
     from superset_config_docker import *  # noqa: F403

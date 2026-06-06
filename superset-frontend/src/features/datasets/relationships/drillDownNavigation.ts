@@ -11,13 +11,13 @@
  */
 
 import { useCallback, useState } from 'react';
-import type { DrillDownLevel, DrillDownHierarchy } from './types';
+import type { DrillDownHierarchy } from './types';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type { DrillDownLevel, DrillDownHierarchy };
+export type { DrillDownLevel } from './types';
 
 export interface DrillDownState {
   hierarchyId: string;

@@ -1401,7 +1401,7 @@ export function TableRenderer(props: TableRendererProps) {
         totalCell,
       ];
 
-      return <tr key={`keyRow-${flatRowKey}`}>{rowCells}</tr>;
+      return <tr key={`keyRow-${flatRowKey}`} className={rowIdx % 2 === 1 ? 'zebra-row' : ''}>{rowCells}</tr>;
     },
     [
       tableOptions,
