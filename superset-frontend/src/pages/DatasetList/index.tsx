@@ -1152,6 +1152,14 @@ const DatasetList: FunctionComponent<DatasetListProps> = ({
     });
   }
 
+  if (canCreate && isFeatureEnabled(FeatureFlag.DatasetRelationships)) {
+    buttonArr.push({
+      name: t('Relationships'),
+      buttonStyle: 'link',
+      onClick: () => history.push('/dataset/relationships/'),
+    });
+  }
+
   if (canDelete || canExport) {
     buttonArr.push({
       name: t('Bulk select'),

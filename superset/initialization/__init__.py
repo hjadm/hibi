@@ -164,6 +164,10 @@ class SupersetAppInitializer:  # pylint: disable=too-many-public-methods
         from superset.dashboards.filter_state.api import DashboardFilterStateRestApi
         from superset.dashboards.permalink.api import DashboardPermalinkRestApi
         from superset.databases.api import DatabaseRestApi
+        if feature_flag_manager.is_feature_enabled("DATASET_RELATIONSHIPS"):
+            from superset.dataset_relationship.api import DatasetRelationshipRestApi
+
+            appbuilder.add_api(DatasetRelationshipRestApi)
         from superset.datasets.api import DatasetRestApi
         from superset.datasets.columns.api import DatasetColumnsRestApi
         from superset.datasets.metrics.api import DatasetMetricRestApi
@@ -338,6 +342,18 @@ class SupersetAppInitializer:  # pylint: disable=too-many-public-methods
             icon="fa-table",
             category="",
             category_icon="",
+        )
+
+        appbuilder.add_link(
+            "Dataset Relationships",
+            label=_("Relationships"),
+            href=f"{app_root}/dataset/relationships/",
+            icon="fa-link",
+            category="",
+            category_icon="",
+            cond=lambda: feature_flag_manager.is_feature_enabled(
+                "DATASET_RELATIONSHIPS"
+            ),
         )
 
         appbuilder.add_view(

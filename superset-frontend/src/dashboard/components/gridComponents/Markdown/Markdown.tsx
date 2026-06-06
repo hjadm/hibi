@@ -378,8 +378,8 @@ class Markdown extends PureComponent<MarkdownProps, MarkdownState> {
 
     // inherit the size of parent columns
     const widthMultiple =
-      parentComponent.type === COLUMN_TYPE
-        ? parentComponent.meta.width || GRID_MIN_COLUMN_COUNT
+      parentComponent?.type === COLUMN_TYPE
+        ? parentComponent?.meta?.width || GRID_MIN_COLUMN_COUNT
         : component.meta.width || GRID_MIN_COLUMN_COUNT;
 
     const isEditing = editorMode === 'edit';
@@ -388,7 +388,7 @@ class Markdown extends PureComponent<MarkdownProps, MarkdownState> {
       <Draggable
         component={component}
         parentComponent={parentComponent}
-        orientation={parentComponent.type === ROW_TYPE ? 'column' : 'row'}
+        orientation={parentComponent?.type === ROW_TYPE ? 'column' : 'row'}
         index={index}
         depth={depth}
         onDrop={handleComponentDrop}
@@ -419,7 +419,7 @@ class Markdown extends PureComponent<MarkdownProps, MarkdownState> {
             >
               <ResizableContainer
                 id={component.id}
-                adjustableWidth={parentComponent.type === ROW_TYPE}
+                adjustableWidth={parentComponent?.type === ROW_TYPE}
                 adjustableHeight
                 widthStep={columnWidth}
                 widthMultiple={widthMultiple}

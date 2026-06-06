@@ -97,6 +97,37 @@ export interface Dataset {
   normalize_columns?: boolean;
   always_filter_main_dttm?: boolean;
   extra?: object | string;
+  relationships?: DatasetRelationship[];
+}
+
+/**
+ * Relationship between two datasets.
+ * Mirrors the backend DatasetRelationship schema.
+ */
+export interface DatasetRelationship {
+  id: number;
+  uuid: string;
+  source_dataset_id: number;
+  target_dataset_id: number;
+  relationship_type: 'one_to_one' | 'one_to_many' | 'many_to_one' | 'many_to_many';
+  join_type: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL';
+  is_cross_database: boolean;
+  is_active: boolean;
+  name: string | null;
+  description: string | null;
+  columns: RelationshipColumn[];
+  created_on?: string;
+  changed_on?: string;
+  created_by_fk?: number;
+  changed_by_fk?: number;
+}
+
+export interface RelationshipColumn {
+  id?: number;
+  source_column_name: string;
+  target_column_name: string;
+  operator: '=' | '!=' | '>' | '<' | '>=' | '<=';
+  ordinal: number;
 }
 
 export interface ControlPanelState {

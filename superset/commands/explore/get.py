@@ -23,6 +23,7 @@ from flask import request
 from flask_babel import lazy_gettext as _
 from sqlalchemy.exc import SQLAlchemyError
 
+from superset import is_feature_enabled
 from superset.commands.base import BaseCommand
 from superset.commands.explore.form_data.get import GetFormDataCommand
 from superset.commands.explore.form_data.parameters import (
@@ -31,6 +32,7 @@ from superset.commands.explore.form_data.parameters import (
 from superset.commands.explore.parameters import CommandParameters
 from superset.commands.explore.permalink.get import GetExplorePermalinkCommand
 from superset.connectors.sqla.models import BaseDatasource, SqlaTable
+from superset.daos.dataset_relationship import DatasetRelationshipDAO
 from superset.daos.datasource import DatasourceDAO
 from superset.daos.exceptions import DatasourceNotFound
 from superset.exceptions import SupersetException
@@ -156,6 +158,25 @@ class GetExploreCommand(BaseCommand, ABC):
             message = ex.message
         except SQLAlchemyError:
             message = "SQLAlchemy error"
+
+        # Inject dataset relationships into the explore context
+        if is_feature_enabled("DATASET_RELATIONSHIPS"):
+            from superset.dataset_relationship.schemas import (
+                DatasetRelationshipGetSchema,
+            )
+            try:
+                relationship_dao = DatasetRelationshipDAO
+                relationships = relationship_dao.find_by_dataset_id(
+                    self._datasource_id, active_only=True
+                )
+                schema = DatasetRelationshipGetSchema(many=True)
+                datasource_data["relationships"] = schema.dump(relationships)
+            except Exception:  # pylint: disable=broad-exception-caught
+                logger.exception(
+                    "Failed to inject relationships for dataset %s",
+                    self._datasource_id,
+                )
+                datasource_data["relationships"] = []
 
         metadata = None
 
