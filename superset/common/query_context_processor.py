@@ -239,8 +239,291 @@ class QueryContextProcessor:
         This method delegates to the datasource's get_query_result method,
         which handles query execution, normalization, time offsets, and
         post-processing.
+
+        If active_relationships are present in the query context, this method
+        will apply same-database JOIN injection or cross-database Pandas merge.
         """
+        # Check if there are active relationships to process
+        active_rels = self._query_context.active_relationships
+        if not active_rels:
+            return self._qc_datasource.get_query_result(query_object)
+
+        # Process relationships (lazy import to avoid circular imports)
+        try:
+            return self._get_query_result_with_relationships(
+                query_object, active_rels
+            )
+        except Exception as ex:
+            logger.exception("Failed to apply relationships: %s", ex)
+            # Fall back to normal query without relationships
+            logger.warning("Falling back to query without relationships")
+            return self._qc_datasource.get_query_result(query_object)
+
+    def _get_query_result_with_relationships(
+        self, query_object: QueryObject, active_rels: list[dict[str, Any]]
+    ) -> QueryResult:
+        """
+        Apply dataset relationships to the query.
+
+        Handles both same-database (via JOIN injection) and cross-database
+        (via Pandas merge) relationships.
+        """
+        from superset.daos.dataset_relationship import DatasetRelationshipDAO
+        from superset.common.relationship_merger import RelationshipMerger
+        from superset.common.relationship_query_injector import (
+            RelationshipQueryInjector,
+        )
+        from superset import is_feature_enabled
+
+        # Check feature flag
+        if not is_feature_enabled("DATASET_RELATIONSHIPS"):
+            logger.warning("DATASET_RELATIONSHIPS feature flag is disabled")
+            return self._qc_datasource.get_query_result(query_object)
+
+        # Limit the number of active relationships
+        max_rels = current_app.config.get("RELATIONSHIP_MAX_ACTIVE", 5)
+        if len(active_rels) > max_rels:
+            raise QueryObjectValidationError(
+                _("Cannot use more than %(max)s relationships at once", max=max_rels)
+            )
+
+        # Load relationship models from IDs
+        relationship_ids = [rel.get("relationship_id") for rel in active_rels]
+        relationships = [
+            DatasetRelationshipDAO.find_by_id(rid)
+            for rid in relationship_ids
+        ]
+        relationships = [r for r in relationships if r is not None]
+
+        if not relationships:
+            logger.warning("No valid relationships found from IDs: %s", relationship_ids)
+            return self._qc_datasource.get_query_result(query_object)
+
+        # Separate same-database and cross-database relationships
+        same_db_rels = RelationshipQueryInjector.get_same_db_relationships(
+            relationships
+        )
+        cross_db_rels = RelationshipQueryInjector.get_cross_db_relationships(
+            relationships
+        )
+
+        logger.info(
+            "Processing %d same-db and %d cross-db relationships",
+            len(same_db_rels),
+            len(cross_db_rels),
+        )
+
+        # If we have cross-database relationships, use Pandas merge
+        if cross_db_rels:
+            return self._get_cross_db_query_result(
+                query_object, cross_db_rels, active_rels
+            )
+
+        # For same-database relationships, try JOIN injection
+        # Note: This requires the datasource to be a SQLA datasource
+        if same_db_rels:
+            return self._get_same_db_query_result(query_object, same_db_rels)
+
+        # Fallback to normal query
         return self._qc_datasource.get_query_result(query_object)
+
+    def _get_cross_db_query_result(
+        self,
+        query_object: QueryObject,
+        cross_db_rels: list,
+        active_rels: list[dict[str, Any]],
+    ) -> QueryResult:
+        """
+        Execute queries for source and target datasets separately,
+        then merge using Pandas.
+        """
+        from superset.daos.dataset import DatasetDAO
+        from superset.common.relationship_merger import RelationshipMerger
+
+        # Get source dataset ID from the datasource
+        source_dataset_id = self._qc_datasource.id
+
+        # Execute query for source dataset
+        source_result = self._qc_datasource.get_query_result(query_object)
+        source_df = source_result.df
+
+        if source_df.empty:
+            return source_result
+
+        # Execute queries for each target dataset
+        target_dfs = {}
+        for rel in cross_db_rels:
+            target_dataset = DatasetDAO.find_by_id(rel.target_dataset_id)
+            if not target_dataset:
+                logger.warning(
+                    "Target dataset %s not found, skipping relationship",
+                    rel.target_dataset_id,
+                )
+                continue
+
+            # Create a minimal query object for the target dataset
+            # We'll select just the join columns plus any selected columns
+            target_query_obj = self._create_target_query_object(
+                query_object, rel, active_rels
+            )
+
+            try:
+                target_result = target_dataset.get_query_result(target_query_obj)
+                target_dfs[rel.target_dataset_id] = target_result.df
+            except Exception as ex:
+                logger.exception(
+                    "Failed to query target dataset %s: %s",
+                    rel.target_dataset_id,
+                    ex,
+                )
+
+        if not target_dfs:
+            logger.warning("No target datasets queried successfully")
+            return source_result
+
+        # Merge DataFrames
+        try:
+            merged_df = RelationshipMerger.merge_multiple(
+                source_df=source_df,
+                target_dfs=target_dfs,
+                relationships=cross_db_rels,
+                selected_columns_map={
+                    rel.get("relationship_id"): rel.get("target_columns", [])
+                    for rel in active_rels
+                },
+            )
+
+            # Return a QueryResult with the merged DataFrame
+            from superset.models.helpers import QueryResult
+            from superset.common.db_query_status import QueryStatus
+
+            return QueryResult(
+                df=merged_df,
+                query=source_result.query + " [merged with cross-database relationships]",
+                duration=source_result.duration,
+                status=QueryStatus.SUCCESS,
+            )
+
+        except Exception as ex:
+            logger.exception("Cross-database merge failed: %s", ex)
+            raise QueryObjectValidationError(
+                _("Cross-database merge failed: %(error)s", error=str(ex))
+            )
+
+    def _get_same_db_query_result(
+        self, query_object: QueryObject, same_db_rels: list
+    ) -> QueryResult:
+        """
+        Apply JOIN injection for same-database relationships.
+
+        For SQL-based datasources, we inject JOIN clauses into the SQLAlchemy
+        query object. The datasource already has _maybe_inject_relationship_joins()
+        which handles the injection - we just need to ensure active_relationships
+        are available to it.
+        """
+        # Lazy import to avoid circular imports
+        from superset.common.relationship_query_injector import (
+            RelationshipQueryInjector,
+        )
+
+        # Add target columns from relationships to the query object
+        # This ensures the JOINed columns are included in the SELECT clause
+        query_object_with_rels = self._augment_query_object_with_relationship_columns(
+            query_object, same_db_rels
+        )
+
+        try:
+            # The datasource's query() method will call _maybe_inject_relationship_joins()
+            # if the DATASET_RELATIONSHIPS feature flag is enabled
+            result = self._qc_datasource.query(query_object_with_rels.to_dict())
+
+            # Add a note to the query string indicating relationships were used
+            if result.query:
+                rel_names = [f"'{r.name or f'id={r.id}'}'" for r in same_db_rels]
+                result.query += f" -- with same-DB JOIN(s): {', '.join(rel_names)}"
+
+            return result
+
+        except Exception as ex:
+            logger.exception("Same-database JOIN injection failed: %s", ex)
+            logger.warning("Falling back to normal query without relationships")
+            return self._qc_datasource.get_query_result(query_object)
+
+    def _augment_query_object_with_relationship_columns(
+        self, query_object: QueryObject, relationships: list
+    ) -> QueryObject:
+        """
+        Add target columns from active relationships to the query object.
+
+        This ensures that when JOINs are injected, the target columns are
+        included in the SELECT clause.
+        """
+        # Get active_rels from query context to find which target columns to include
+        active_rels = self._query_context.active_relationships or []
+
+        # Build a map of relationship_id -> target_columns
+        target_columns_map = {}
+        for active_rel in active_rels:
+            rel_id = active_rel.get("relationship_id")
+            target_cols = active_rel.get("target_columns", [])
+            target_columns_map[rel_id] = target_cols
+
+        # Collect all target columns that should be included
+        additional_columns = []
+        for rel in relationships:
+            if rel.id in target_columns_map:
+                target_cols = target_columns_map[rel.id]
+                # Add each target column as a simple column reference
+                for col_name in target_cols:
+                    # Check if column is already in the query
+                    if col_name not in [
+                        c.get("column_name") if isinstance(c, dict) else str(c)
+                        for c in (query_object.columns or [])
+                    ]:
+                        additional_columns.append({"column_name": col_name})
+
+        # Create a new query object with additional columns
+        if additional_columns:
+            from copy import deepcopy
+
+            new_query_obj = deepcopy(query_object)
+            new_query_obj.columns = list(query_object.columns or []) + additional_columns
+            return new_query_obj
+
+        return query_object
+
+    def _create_target_query_object(
+        self,
+        source_query_object: QueryObject,
+        relationship,
+        active_rels: list[dict[str, Any]],
+    ) -> QueryObject:
+        """
+        Create a query object for the target dataset.
+
+        Selects the join columns plus any user-selected target columns.
+        """
+        from superset.common.query_object import QueryObject
+
+        # Get selected target columns for this relationship
+        rel_config = next(
+            (r for r in active_rels if r.get("relationship_id") == relationship.id),
+            None,
+        )
+        selected_cols = rel_config.get("target_columns", []) if rel_config else []
+
+        # Build list of columns to select from target
+        # Always include the join keys
+        join_key_cols = [col.target_column_name for col in relationship.columns]
+        columns_to_select = list(set(join_key_cols + selected_cols))
+
+        # Create a minimal QueryObject for the target
+        # We use the same filters as the source, but this might need refinement
+        target_query_dict = source_query_object.to_dict()
+        target_query_dict["columns"] = columns_to_select
+        target_query_dict["metrics"] = []  # No metrics for target dataset
+
+        return QueryObject.from_dict(target_query_dict)
 
     def get_data(
         self, df: pd.DataFrame, coltypes: list[GenericDataType]

@@ -908,7 +908,83 @@ class Superset(BaseSupersetView):
             return json_error_response(DATASOURCE_MISSING_ERR)
 
         datasource.raise_for_access()
-        return json_success(json.dumps(sanitize_datasource_data(datasource.data)))
+        data = sanitize_datasource_data(datasource.data)
+
+        # Add relationship_target_dataset metadata to columns from active relationships
+        data = self._inject_relationship_metadata(data, datasource)
+
+        return json_success(json.dumps(data))
+
+    def _inject_relationship_metadata(
+        self, data: dict[str, Any], datasource: Any
+    ) -> dict[str, Any]:
+        """
+        Inject relationship_target_dataset metadata into columns that come from
+        active relationships.
+
+        This modifies the column metadata in-place to add a visual indicator
+        in the frontend.
+
+        :param data: The datasource data dict with columns
+        :param datasource: The datasource object
+        :returns: Modified data dict
+        """
+        # Lazy import to avoid circular imports
+        from superset import is_feature_enabled
+
+        if not is_feature_enabled("DATASET_RELATIONSHIPS"):
+            return data
+
+        # Get active_relationships from request args
+        active_relationships_str = request.args.get("active_relationships")
+        if active_relationships_str:
+            try:
+                active_relationships = json.loads(active_relationships_str)
+            except (json.JSONDecodeError, TypeError):
+                active_relationships = []
+        else:
+            active_relationships = []
+
+        if not active_relationships:
+            return data
+
+        # Get relationship IDs from active_relationships
+        relationship_ids = [
+            rel.get("relationship_id") for rel in active_relationships
+            if rel.get("relationship_id")
+        ]
+
+        if not relationship_ids:
+            return data
+
+        # Load relationship models
+        from superset.daos.dataset_relationship import DatasetRelationshipDAO
+
+        relationships = [
+            DatasetRelationshipDAO.find_by_id(rid) for rid in relationship_ids
+        ]
+        relationships = [r for r in relationships if r is not None]
+
+        # Build a map of target_column_name -> source_dataset_name
+        target_to_source = {}
+        for rel in relationships:
+            source_name = (
+                rel.source_dataset.verbose_name
+                if rel.source_dataset.verbose_name
+                else rel.source_dataset.table_name
+            )
+            for col_pair in rel.columns:
+                # The target_column is the column from the target dataset
+                # that will be available in the source dataset after JOIN
+                target_to_source[col_pair.target_column_name] = source_name
+
+        # Inject metadata into columns
+        for column in data.get("columns", []):
+            col_name = column.get("column_name")
+            if col_name in target_to_source:
+                column["relationship_target_dataset"] = target_to_source[col_name]
+
+        return data
 
     @event_logger.log_this
     @has_access

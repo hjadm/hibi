@@ -1424,9 +1424,29 @@ class ChartDataQueryContextSchema(Schema):
 
     form_data = fields.Raw(allow_none=True, required=False)
 
+    # Optional: validate active_relationships if present in form_data
+    active_relationships = fields.List(
+        fields.Dict(
+            keys=fields.String(),
+            values=fields.Raw(),
+        ),
+        metadata={
+            "description": "Active dataset relationships for this query. "
+            "Each object should have: relationship_id (int), "
+            "target_columns (list[str], optional)"
+        },
+        required=False,
+        allow_none=True,
+    )
+
     # pylint: disable=unused-argument
     @post_load
     def make_query_context(self, data: dict[str, Any], **kwargs: Any) -> QueryContext:
+        # Ensure active_relationships is included in form_data for QueryContext
+        if "active_relationships" in data and data["active_relationships"] is not None:
+            form_data = data.get("form_data") or {}
+            form_data["active_relationships"] = data["active_relationships"]
+            data["form_data"] = form_data
         query_context = self.get_query_context_factory().create(**data)
         return query_context
 

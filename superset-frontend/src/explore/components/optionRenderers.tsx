@@ -24,6 +24,8 @@ import {
   MetricOptionProps,
   ColumnOptionProps,
 } from '@superset-ui/chart-controls';
+import { isFeatureEnabled, FeatureFlag } from '@superset-ui/core';
+import { RelationshipColumnBadge } from 'src/features/datasets/relationships/components/RelationshipColumnBadge';
 
 const OptionContainer = styled.div`
   width: 100%;
@@ -56,8 +58,23 @@ export const StyledMetricOption = (props: MetricOptionProps) => (
   </OptionContainer>
 );
 
-export const StyledColumnOption = (props: ColumnOptionProps) => (
-  <OptionContainer>
-    <ColumnOption {...props} />
-  </OptionContainer>
-);
+export const StyledColumnOption = (props: ColumnOptionProps) => {
+  // Check if this column has relationship metadata
+  const targetDatasetName =
+    isFeatureEnabled(FeatureFlag.DatasetRelationships) &&
+    props.column?.relationship_target_dataset
+      ? props.column.relationship_target_dataset
+      : undefined;
+
+  return (
+    <OptionContainer>
+      <ColumnOption {...props} />
+      {targetDatasetName && (
+        <RelationshipColumnBadge
+          targetDatasetName={targetDatasetName}
+          compact
+        />
+      )}
+    </OptionContainer>
+  );
+};

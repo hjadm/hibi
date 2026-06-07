@@ -16,7 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { useMemo, useCallback, useState } from 'react';
+import { useMemo, useCallback, useState, useEffect } from 'react';
+import { useDispatch } from 'react-redux';
 import type { DatasetRelationship, RelationshipColumn } from '../types';
 
 /**
@@ -58,10 +59,17 @@ export interface ExploreRelationshipsState {
  * - Toggle JOINs on/off
  * - Select which target columns to include
  * - Build the form_data fragment to send to the query backend
+ *
+ * @param relationships - Array of DatasetRelationship from datasource metadata
+ * @param form_data - Current form_data from Explore
+ * @param setControlValue - Redux action to update form_data values
  */
 export function useExploreRelationships(
   relationships: DatasetRelationship[],
+  form_data?: Record<string, any>,
+  setControlValue?: (key: string, value: any) => void,
 ) {
+  const dispatch = useDispatch();
   const [activeJoins, setActiveJoins] = useState<Map<number, ActiveJoin>>(
     () => new Map(),
   );
@@ -142,6 +150,26 @@ export function useExploreRelationships(
     Map<number, string[]>
   >(availableTargetColumns);
 
+  // Initialize activeJoins from form_data when component mounts
+  useEffect(() => {
+    if (form_data?.active_relationships && relationships.length > 0) {
+      const initialJoins = new Map();
+      form_data.active_relationships.forEach((activeRel: any) => {
+        const rel = relationships.find(r => r.id === activeRel.relationship_id);
+        if (rel) {
+          initialJoins.set(activeRel.relationship_id, {
+            relationshipId: activeRel.relationship_id,
+            selectedColumns: activeRel.target_columns || [],
+            enabled: true,
+          });
+          // Load target columns for this relationship
+          loadTargetColumns(activeRel.relationship_id);
+        }
+      });
+      setActiveJoins(initialJoins);
+    }
+  }, [form_data?.active_relationships, relationships]);
+
   // Toggle a relationship JOIN on/off
   const toggleJoin = useCallback(
     async (relationshipId: number) => {
@@ -153,7 +181,32 @@ export function useExploreRelationships(
         const current = next.get(relationshipId);
 
         if (current) {
-          next.set(relationshipId, { ...current, enabled: !current.enabled });
+          const newEnabled = !current.enabled;
+          next.set(relationshipId, { ...current, enabled: newEnabled });
+
+          // Update form_data via setControlValue
+          if (setControlValue && form_data) {
+            const currentActiveRelationships =
+              form_data.active_relationships || [];
+            if (newEnabled) {
+              // Add to active relationships
+              setControlValue('active_relationships', [
+                ...currentActiveRelationships,
+                {
+                  relationship_id: relationshipId,
+                  target_columns: current.selectedColumns || [],
+                },
+              ]);
+            } else {
+              // Remove from active relationships
+              setControlValue(
+                'active_relationships',
+                currentActiveRelationships.filter(
+                  (r: any) => r.relationship_id !== relationshipId,
+                ),
+              );
+            }
+          }
         } else {
           // Default: first 5 target columns auto-selected
           const defaultSelected = rel.columns.map(c => c.target_column_name);
@@ -162,6 +215,20 @@ export function useExploreRelationships(
             selectedColumns: defaultSelected,
             enabled: true,
           });
+
+          // Update form_data via setControlValue
+          if (setControlValue && form_data) {
+            const currentActiveRelationships =
+              form_data.active_relationships || [];
+            setControlValue('active_relationships', [
+              ...currentActiveRelationships,
+              {
+                relationship_id: relationshipId,
+                target_columns: defaultSelected,
+              },
+            ]);
+          }
+
           // Eagerly load target columns
           loadTargetColumns(relationshipId);
         }
@@ -169,7 +236,7 @@ export function useExploreRelationships(
         return next;
       });
     },
-    [relationships, loadTargetColumns],
+    [relationships, loadTargetColumns, form_data, setControlValue],
   );
 
   // Enable a specific relationship with all target columns
@@ -218,8 +285,22 @@ export function useExploreRelationships(
         }
         return next;
       });
+
+      // Update form_data via setControlValue
+      if (setControlValue && form_data) {
+        const currentActiveRelationships =
+          form_data.active_relationships || [];
+        setControlValue(
+          'active_relationships',
+          currentActiveRelationships.map((r: any) =>
+            r.relationship_id === relationshipId
+              ? { ...r, target_columns: columns }
+              : r,
+          ),
+        );
+      }
     },
-    [],
+    [form_data, setControlValue],
   );
 
   // Get the ColumnRelationshipInfo for a specific column

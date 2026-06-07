@@ -80,6 +80,7 @@ import Control from './Control';
 import { ExploreAlert } from './ExploreAlert';
 import { RunQueryButton } from './RunQueryButton';
 import { Operators } from '../constants';
+import RelationshipSidebar from 'src/features/datasets/relationships/components/RelationshipSidebar';
 import { Clauses } from './controls/FilterControl/types';
 import StashFormDataContainer from './StashFormDataContainer';
 
@@ -87,6 +88,7 @@ const TABS_KEYS = {
   DATA: 'DATA',
   CUSTOMIZE: 'CUSTOMIZE',
   MATRIXIFY: 'MATRIXIFY',
+  RELATIONSHIPS: 'RELATIONSHIPS',
 };
 
 // Table charts don't support matrixify feature
@@ -300,6 +302,36 @@ export const ControlPanelsContainer = (props: ControlPanelsContainerProps) => {
   const theme = useTheme();
   const pluginContext = useContext(PluginContext);
   const { showConfirm, ConfirmModal } = useConfirmModal();
+
+  // Import useExploreRelationships hook for dataset relationships
+  let useExploreRelationships: any;
+  let relationships: any[] = [];
+  try {
+    const relationshipHook = require('src/features/datasets/relationships/hooks/useExploreRelationships');
+    useExploreRelationships = relationshipHook.useExploreRelationships;
+  } catch (e) {
+    // Hook not available, relationships tab won't be shown
+  }
+
+  // Only load relationships if feature flag is enabled and we have the hook
+  const showRelationshipsTab = Boolean(
+    useExploreRelationships &&
+    isFeatureEnabled(FeatureFlag.DATASET_RELATIONSHIPS) &&
+    props.exploreState.datasource?.id
+  );
+
+  if (showRelationshipsTab && useExploreRelationships) {
+    try {
+      const datasetId = props.exploreState.datasource?.id;
+      // Get relationships from datasource metadata
+      const datasetRelationships =
+        props.exploreState.datasource?.relationships || [];
+      const hookResult = useExploreRelationships(datasetRelationships);
+      relationships = hookResult.relationships || [];
+    } catch (e) {
+      console.error('Error loading relationships:', e);
+    }
+  }
 
   const prevState = usePrevious(props.exploreState);
   const prevDatasource = usePrevious(props.exploreState.datasource);
@@ -1021,6 +1053,21 @@ export const ControlPanelsContainer = (props: ControlPanelsContainerProps) => {
                           )}
                         />
                       </>
+                    ),
+                  },
+                ]
+              : []),
+            ...(showRelationshipsTab
+              ? [
+                  {
+                    key: TABS_KEYS.RELATIONSHIPS,
+                    label: t('Relationships'),
+                    children: (
+                      <RelationshipSidebar
+                        datasetId={props.exploreState.datasource?.id || 0}
+                        form_data={props.form_data}
+                        setControlValue={props.actions.setControlValue}
+                      />
                     ),
                   },
                 ]

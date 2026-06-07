@@ -54,6 +54,7 @@ class QueryContext:
     custom_cache_timeout: int | None
 
     cache_values: dict[str, Any]
+    active_relationships: list[dict[str, Any]] | None
 
     _processor: QueryContextProcessor
 
@@ -81,6 +82,10 @@ class QueryContext:
         self.force = force
         self.custom_cache_timeout = custom_cache_timeout
         self.cache_values = cache_values
+        # Extract active_relationships from form_data if present
+        self.active_relationships = (
+            form_data.get("active_relationships") if form_data else None
+        )
         self._processor = QueryContextProcessor(self)
 
     def get_data(
