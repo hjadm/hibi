@@ -140,6 +140,8 @@ if os.getenv("CYPRESS_CONFIG") == "true":
 # Optionally import superset_config_docker.py (which will have been included on
 # the PYTHONPATH) in order to allow for local settings to be overridden
 #
+# Override CSP to allow react-refresh/webpack hot reload
+TALISMAN_ENABLED = False
 # Disable CSRF for dev (overrides superset/config.py)
 WTF_CSRF_ENABLED = False
 

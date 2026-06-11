@@ -25,6 +25,7 @@ import {
   getMetricLabel,
   getXAxisLabel,
   Metric,
+  Currency,
   getValueFormatter,
   tooltipHtml,
 } from '@superset-ui/core';
@@ -268,7 +269,7 @@ export default function transformProps(
     currencyFormats,
     columnFormats,
     metricEntry?.d3format || yAxisFormat,
-    currencyFormat,
+    currencyFormat as Currency | undefined,
     undefined,
     data,
     currencyCodeColumn,

@@ -25,8 +25,8 @@ import {
   getMetricLabel,
   extractTimegrain,
   QueryFormData,
+  Currency,
   getValueFormatter,
-  isSavedMetric,
   ensureIsArray,
 } from '@superset-ui/core';
 import { GenericDataType } from '@apache-superset/core/common';
@@ -113,7 +113,7 @@ export default function transformProps(
     currencyFormats,
     columnFormats,
     metricEntry?.d3format || yAxisFormat,
-    currencyFormat,
+    currencyFormat as Currency | undefined,
     undefined,
     data,
     currencyCodeColumn,
