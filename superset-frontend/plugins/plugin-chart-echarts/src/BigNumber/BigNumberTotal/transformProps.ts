@@ -26,6 +26,8 @@ import {
   extractTimegrain,
   QueryFormData,
   getValueFormatter,
+  isSavedMetric,
+  ensureIsArray,
 } from '@superset-ui/core';
 import { GenericDataType } from '@apache-superset/core/common';
 import { BigNumberTotalChartProps, BigNumberVizProps } from '../types';
@@ -82,6 +84,17 @@ export default function transformProps(
   const bigNumber =
     data.length === 0 ? null : parseMetricValue(data[0][metricName]);
 
+  // --- Target / Progress Bar ---
+  const showTarget = formData.show_target ?? true;
+  const targetMetrics = ensureIsArray(formData.target);
+  let targetValue: number | null = null;
+  const hasTarget = showTarget && targetMetrics.length > 0 && data.length > 0;
+  if (hasTarget) {
+    const targetLabel = getMetricLabel(targetMetrics[0]);
+    const raw = data[0][targetLabel];
+    targetValue = raw != null ? Number(raw) : null;
+  }
+
   let metricEntry: Metric | undefined;
   if (chartProps.datasource?.metrics) {
     metricEntry = chartProps.datasource.metrics.find(
@@ -114,6 +127,9 @@ export default function transformProps(
       ? formatTime
       : numberFormatter;
 
+  // targetFormatter reuses same number format as main metric
+  const targetFormatter = numberFormatter;
+
   const { onContextMenu } = hooks;
 
   const defaultColorFormatters = [] as ColorFormatters;
@@ -136,5 +152,8 @@ export default function transformProps(
     metricName: originalLabel,
     showMetricName,
     metricNameFontSize,
+    targetValue,
+    showTarget,
+    targetFormatter,
   };
 }

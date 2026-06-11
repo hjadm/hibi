@@ -113,3 +113,30 @@ export const metricNameFontSizeWithVisibility: CustomControlItem = {
     resetOnHide: false,
   },
 };
+
+export const targetControl: CustomControlItem = {
+  name: 'target',
+  config: {
+    type: 'MetricsControl',
+    label: t('Target Value'),
+    default: [],
+    description: t('Optional target metric. Must return a single numeric value.'),
+    multi: false,
+    mapStateToProps: (state: any) => ({
+      columns: state?.datasource?.columns ?? [],
+      datasourceType: state?.datasource?.type,
+      datasourceId: state?.datasource?.id,
+    }),
+  },
+};
+
+export const showTargetControl: CustomControlItem = {
+  name: 'show_target',
+  config: {
+    type: 'CheckboxControl',
+    label: t('Show target/progress bar'),
+    renderTrigger: true,
+    default: true,
+    description: t('Display a progress bar comparing current value to target.'),
+  },
+};

@@ -51,6 +51,9 @@ function BigNumberVis({
   subheaderFontSize = PROPORTION.SUBHEADER,
   subtitleFontSize = PROPORTION.SUBHEADER,
   timeRangeFixed = false,
+  targetValue = null,
+  showTarget = true,
+  targetFormatter = defaultNumberFormatter,
   ...props
 }: BigNumberVizProps) {
   const theme = useTheme();
@@ -64,6 +67,7 @@ function BigNumberVis({
   const headerRef = useRef<HTMLDivElement>(null);
   const subheaderRef = useRef<HTMLDivElement>(null);
   const subtitleRef = useRef<HTMLDivElement>(null);
+  const targetRef = useRef<HTMLDivElement>(null);
 
   // Convert componentDidMount
   useEffect(() => {
@@ -335,6 +339,64 @@ function BigNumberVis({
     return null;
   };
 
+  const renderTargetBar = () => {
+    const { bigNumber } = props;
+    if (
+      !showTarget ||
+      targetValue === null ||
+      targetValue === undefined ||
+      bigNumber === null ||
+      bigNumber === undefined
+    ) {
+      return null;
+    }
+
+    const current = Number(bigNumber);
+    if (Number.isNaN(current)) return null;
+
+    const target = targetValue;
+    const barHeight = 10;
+    const percentage = target > 0 ? Math.min(current / target, 1) : 0;
+    const percentDisplay = (percentage * 100).toFixed(0);
+    const diff = target - current;
+    const diffPercent = target > 0 ? ((diff / target) * 100).toFixed(1) : '0.0';
+    const diffFormatted = targetFormatter(diff);
+
+    // bar colors
+    let barColor = mainColor || '#22c55e';
+    if (percentage >= 1) {
+      barColor = '#22c55e';
+    } else if (percentage < 0.5) {
+      barColor = '#ef4444';
+    } else if (percentage < 0.75) {
+      barColor = '#f59e0b';
+    }
+
+    const targetFormatted = targetFormatter(target);
+
+    return (
+      <div ref={targetRef} className="target-bar-container" style={{ width: '100%', padding: '2px 0 4px', boxSizing: 'border-box' }}>
+        {/* Progress bar */}
+        <div style={{ width: '100%', height: barHeight, backgroundColor: '#e5e7eb', borderRadius: barHeight / 2, overflow: 'hidden', position: 'relative' }}>
+          <div style={{ width: `${Math.max(percentage * 100, 2)}%`, height: '100%', backgroundColor: barColor, borderRadius: barHeight / 2, transition: 'width 0.3s ease', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: percentage > 0.1 ? '4px' : '0', boxSizing: 'border-box' }}>
+            {percentage > 0.1 && (
+              <span style={{ color: '#fff', fontSize: `${Math.min(barHeight * 0.65, 13)}px`, fontWeight: 600, lineHeight: 1 }}>{percentDisplay}%</span>
+            )}
+          </div>
+        </div>
+        {/* Meta / Falta text */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px', fontSize: '12px', color: '#6b7280', lineHeight: 1.3 }}>
+          <span>Meta: {targetFormatted}</span>
+          {diff >= 0 ? (
+            <span style={{ color: '#e11d48' }}>Falta: {diffFormatted} (-{diffPercent}%)</span>
+          ) : (
+            <span style={{ color: '#22c55e' }}>Excedido em {targetFormatter(Math.abs(diff))}</span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderTrendline = (maxHeight: number) => {
     const {
       width,
@@ -400,6 +462,7 @@ function BigNumberVis({
       headerRef,
       subheaderRef,
       subtitleRef,
+      targetRef,
     ];
 
     // Filter refs to only those with a current element
@@ -465,6 +528,7 @@ function BigNumberVis({
           {renderSubtitle(
             Math.ceil(subtitleFontSize * (1 - PROPORTION.TRENDLINE) * height),
           )}
+          {renderTargetBar()}
         </div>
         {renderTrendline(chartHeight)}
       </div>
@@ -494,6 +558,7 @@ function BigNumberVis({
         {renderHeader(Math.ceil(headerFontSize * height))}
         {rendermetricComparisonSummary(Math.ceil(subheaderFontSize * height))}
         {renderSubtitle(Math.ceil(subtitleFontSize * height))}
+        {renderTargetBar()}
       </div>
     </div>
   );
@@ -563,6 +628,12 @@ const StyledBigNumberVis = styled(BigNumberVis)`
       .subheader-line {
         opacity: 60%;
       }
+    }
+
+    .target-bar-container {
+      width: 100%;
+      box-sizing: border-box;
+      margin-bottom: ${theme.sizeUnit * 2}px;
     }
   `}
 `;

@@ -32,6 +32,8 @@ import {
   subtitleControl,
   showMetricNameControl,
   metricNameFontSizeWithVisibility,
+  targetControl,
+  showTargetControl,
 } from '../sharedControls';
 
 export default {
@@ -40,6 +42,15 @@ export default {
       label: t('Query'),
       expanded: true,
       controlSetRows: [['metric'], ['adhoc_filters']],
+    },
+    {
+      label: t('Target'),
+      expanded: false,
+      controlSetRows: [
+        [targetControl],
+        [showTargetControl],
+        ['currency_format'],
+      ],
     },
     {
       label: t('Chart Options'),
